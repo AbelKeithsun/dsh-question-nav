@@ -1,0 +1,8 @@
+# dsh-question-nav bundle patch: inserts its plugin row into the web profile
+# roster. Applied as a profile bundle layer (the `dsh.bundle.patch` manifest
+# field); install with
+# `dsh plugin --profile web add ./dsh-question-nav` (from a local checkout) or
+# `dsh plugin --profile web add <npm-package>` once published.
+- insert:
+    - id: question-nav
+      name: '@linxin666/dsh-client-ui-question-nav'

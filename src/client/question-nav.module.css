@@ -1,0 +1,105 @@
+.rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  background: transparent;
+  /* Overlay: let pointer events pass through to the conversation beyond the
+     dots, so the embedded minimap never blocks the chat. */
+  pointer-events: none;
+}
+
+/* Vertically center the dot column when it is short; scroll from the top when
+   it is tall (auto margins collapse to 0 on overflow, so nothing clips). */
+.list {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  scrollbar-width: thin;
+}
+.list > *:first-child {
+  margin-top: auto;
+}
+.list > *:last-child {
+  margin-bottom: auto;
+}
+
+.dot {
+  flex: none;
+  pointer-events: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  padding: 0;
+  border: none;
+  background: var(--dsw-alias-border-l3);
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease;
+}
+.dot:hover {
+  transform: scale(2);
+  background: var(--dsw-alias-brand-primary);
+}
+.dot.active {
+  transform: scale(1.6);
+  background: var(--dsw-alias-brand-primary);
+}
+
+/* Question count, rendered just above the first dot (sits in the list gap). */
+.count {
+  flex: none;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+/* The centered group: count + dot column, centered together (the list's auto
+   margins center it when short; it scrolls as a unit when tall). */
+.dots {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.empty {
+  padding: 10px 4px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+  word-break: break-word;
+}
+
+/* Instant hover tooltip (rendered in a portal to document.body, so it is never
+   clipped by the rail's scroll container). */
+.tooltip {
+  position: fixed;
+  z-index: 20;
+  max-width: 420px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  white-space: normal;
+  word-break: break-word;
+  pointer-events: none;
+}

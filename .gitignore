@@ -1,0 +1,17 @@
+# dependencies / build outputs
+node_modules
+lib
+.dsh-build
+
+# test / coverage
+coverage
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor / OS
+.DS_Store
+.idea
+.vscode
