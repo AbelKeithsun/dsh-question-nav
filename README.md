@@ -10,6 +10,8 @@ It is an external plugin bundle with zero runtime dependencies — the browser
 half (`lib/client.js`) externalizes everything to the DSH shell, so it adds
 only a small bundle to the GUI at load time.
 
+Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm]).
+
 ## What it does
 
 - **Left-edge dot minimap** (embedded, not reserving any width).
@@ -22,35 +24,34 @@ only a small bundle to the GUI at load time.
 - Empty/left areas of the rail pass pointer events through to the conversation
   (it never blocks the chat).
 
-## Behavior notes
+## Requirements
 
-- Only the current session is indexed; the question list reflects the loaded
-  chat window and expands as history is paged in.
-- `user` and `steering` user messages count as questions.
+- DeepSeek Harness Web GUI (a runnable DSH profile; the `dsh` CLI).
+- Node.js `>= 20` (matches the DSH SDK peer range).
 
-## Install (development / local checkout)
+## Install
 
-This repository is a standalone plugin project — build it, then add it to a
-profile as an installable [bundle][bundle].
+Install the prebuilt package from npm and add it to a profile:
+
+```sh
+dsh plugin --profile web add @luziyang2026/dsh-question-nav
+```
+
+Then restart the DSH Web GUI to load the new bundle.
+
+### Build from source / develop locally
+
+This repository is a standalone plugin project — build it, then add the
+checkout to a profile as an installable [bundle][bundle]:
 
 ```sh
 pnpm install       # install devDependencies (DSH SDK peers, tsdown, vitest)
 pnpm build         # tsc declarations + tsdown client bundle -> lib/
 ```
 
-Add it to a profile (the `dsh` CLI is required):
-
 ```sh
 dsh plugin --profile web add ./dsh-question-nav
 ```
-
-Or, once published, install the prebuilt package from npm:
-
-```sh
-dsh plugin --profile web add @luziyang2026/dsh-question-nav
-```
-
-Restart the DSH Web GUI to load the new bundle.
 
 ## Development
 
@@ -73,4 +74,5 @@ module table.
 BSD-3-Clause.
 
 [dsh]: https://github.com/deepseek-harness/deepseek-harness
+[npm]: https://www.npmjs.com/package/@luziyang2026/dsh-question-nav
 [bundle]: https://github.com/deepseek-harness/deepseek-harness

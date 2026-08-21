@@ -7,6 +7,8 @@
 它是外部插件 bundle，**零运行时依赖** —— 浏览器半区（`lib/client.js`）把一切
 外部化给 DSH 外壳，加载时只往 GUI 里加一个很小的 bundle。
 
+包名：**`@luziyang2026/dsh-question-nav`**（[npm][npm]）。
+
 ## 功能
 
 - **左缘圆点迷你地图**：内嵌，**不占任何宽度**。
@@ -16,33 +18,33 @@
 - **点击**：跳转到该提问，目标尚未加载时自动 `loadOlder` 扩窗（并落到最近可见行兜底）。
 - 圆点列空白区域**点穿**到对话内容，不会挡住聊天。
 
-## 行为说明
+## 环境要求
 
-- 只索引当前会话；问题列表反映已加载的对话窗口，随历史扩窗补全。
-- `user` 与 `steering` 用户消息计为提问。
+- DeepSeek Harness Web GUI（可运行的 DSH profile；需要 `dsh` CLI）。
+- Node.js `>= 20`（与 DSH SDK peer 范围一致）。
 
-## 安装（开发 / 本地 checkout）
+## 安装
 
-本仓库是独立插件工程 —— 先构建，再作为可安装的 [bundle][bundle] 加进 profile。
+从 npm 装预构建包并加进 profile：
+
+```sh
+dsh plugin --profile web add @luziyang2026/dsh-question-nav
+```
+
+然后重启 DSH Web GUI 以加载新 bundle。
+
+### 从源码构建 / 本地开发
+
+本仓库是独立插件工程 —— 先构建，再作为可安装的 [bundle][bundle] 加进 profile：
 
 ```sh
 pnpm install       # 安装 devDependencies（DSH SDK peers、tsdown、vitest）
 pnpm build         # tsc 声明 + tsdown client bundle -> lib/
 ```
 
-加进 profile（需要 `dsh` CLI）：
-
 ```sh
 dsh plugin --profile web add ./dsh-question-nav
 ```
-
-发布后也可直接从 npm 装预构建产物：
-
-```sh
-dsh plugin --profile web add @luziyang2026/dsh-question-nav
-```
-
-重启 DSH Web GUI 以加载新 bundle。
 
 ## 开发
 
@@ -64,4 +66,5 @@ externals 经加载器模块表解析。
 BSD-3-Clause。
 
 [dsh]: https://github.com/deepseek-harness/deepseek-harness
+[npm]: https://www.npmjs.com/package/@luziyang2026/dsh-question-nav
 [bundle]: https://github.com/deepseek-harness/deepseek-harness
