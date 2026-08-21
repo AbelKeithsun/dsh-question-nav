@@ -63,8 +63,8 @@ pnpm build         # build host lib/index.js + client lib/client.js
 ## How it is built
 
 The client half uses the shared DSH client-bundle preset
-([`tsdown.client.ts`](tsdown.client.ts), vendored from the DSH web-UI family),
-which emits a `window.__ModuleLoader__.load({ id, factory })` closure-factory
+([`tsdown.client.ts`](tsdown.client.ts), vendored into this repo), which emits
+a `window.__ModuleLoader__.load({ id, factory })` closure-factory
 artifact with CSS Modules inlined and externals resolved through the loader
 module table.
 

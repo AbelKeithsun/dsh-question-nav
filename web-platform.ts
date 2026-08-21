@@ -4,7 +4,7 @@
  * Mirrors the shell's frozen module table (dsh-web-frontend staticModules,
  * verified against the 0.1.1-rc.1 dist: react, react/jsx-runtime, react-dom,
  * react-dom/client, cordis, dsh-client-ui-slots, dsh-client-ui-primitives).
- * @module dsh-web-ui/shared/web-platform
+ * @module dsh-question-nav/web-platform
  */
 
 /** The module specifiers the shell shares into the frozen module table. */

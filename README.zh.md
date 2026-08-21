@@ -55,7 +55,7 @@ pnpm build         # 构建 host lib/index.js + client lib/client.js
 ## 构建方式
 
 client 半区使用共享的 DSH client-bundle 预设（[`tsdown.client.ts`](tsdown.client.ts)，
-从 DSH web-UI 全家桶 vendored），产出
+vendored 到本项目内），产出
 `window.__ModuleLoader__.load({ id, factory })` 闭包工厂产物，CSS Modules 内联，
 externals 经加载器模块表解析。
 

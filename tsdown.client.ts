@@ -1,7 +1,7 @@
 /**
- * Shared tsdown preset for UI plugin client bundles — the single source of
- * truth for every dsh-web-ui plugin's build (previously copied per-package
- * from the DSH checkout's `packages/client/tsdown.client.ts`). Emits a
+ * Shared tsdown preset for UI plugin client bundles — vendored into this
+ * project (originally the DSH checkout's `packages/client/tsdown.client.ts`,
+ * copied per-package). Emits a
  * closure-factory artifact: the bundle calls window.__ModuleLoader__.load
  * ({id, factory}) and resolves externals through the injected require
  * (loader module table — cordis DI entities, no globals, no import map).
