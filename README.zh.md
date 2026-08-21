@@ -39,7 +39,7 @@ dsh plugin --profile web add ./dsh-question-nav
 发布后也可直接从 npm 装预构建产物：
 
 ```sh
-dsh plugin --profile web add @linxin666/dsh-client-ui-question-nav
+dsh plugin --profile web add dsh-question-nav
 ```
 
 重启 DSH Web GUI 以加载新 bundle。
