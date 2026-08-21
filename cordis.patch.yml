@@ -5,4 +5,4 @@
 # `dsh plugin --profile web add <npm-package>` once published.
 - insert:
     - id: question-nav
-      name: 'dsh-question-nav'
+      name: '@luziyang/dsh-question-nav'

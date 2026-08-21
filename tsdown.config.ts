@@ -8,4 +8,4 @@
  */
 import { clientBundle } from './tsdown.client.ts'
 
-export default clientBundle('dsh-question-nav', ['src/index.ts'])
+export default clientBundle('@luziyang/dsh-question-nav', ['src/index.ts'])

@@ -1,7 +1,7 @@
 # DSH 会话内「提问速览」右侧导航条 — 设计文档
 
 - 日期：2026-08-21
-- 插件包名：`dsh-question-nav`
+- 插件包名：`@luziyang/dsh-question-nav`
 - 形态：DSH web client 插件（外部 bundle，无 DSH 源码改动）
 
 ## 1. 目标
@@ -80,12 +80,12 @@
 
 1. 在 `/Users/mac/Documents/workspace/dsh-question-nav` 建插件包（`package.json`、`src/index.ts`、`src/client.ts`、`cordis.patch.yml`、`tsconfig`、`tsdown` 配置、单测）。
 2. 用 DSH checkout 的 `packages/client/tsdown.client.ts` 预设构建 `lib/client.js`（`__ModuleLoader__.load` 格式），host 侧 `tsc` 产出 `lib/index.js`。
-3. 将包 install/link 进 web profile 的 `node_modules/dsh-question-nav`。
+3. 将包 install/link 进 web profile 的 `node_modules/@luziyang/dsh-question-nav`。
 4. 在 web profile `cordis.patch.yml` 的 insert 段加一行：
    ```yaml
    - insert:
        - id: question-nav
-         name: 'dsh-question-nav'
+         name: '@luziyang/dsh-question-nav'
    ```
 5. 重启/刷新 GUI 验证：进入一个会话，右侧出现提问列表，点击跳转。
 6. 验证通过后按用户项目规范提交 git。

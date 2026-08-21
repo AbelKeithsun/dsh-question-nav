@@ -47,7 +47,7 @@ dsh plugin --profile web add ./dsh-question-nav
 Or, once published, install the prebuilt package from npm:
 
 ```sh
-dsh plugin --profile web add dsh-question-nav
+dsh plugin --profile web add @luziyang/dsh-question-nav
 ```
 
 Restart the DSH Web GUI to load the new bundle.
