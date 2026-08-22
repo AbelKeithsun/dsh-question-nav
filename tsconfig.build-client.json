@@ -1,5 +1,5 @@
 {
-  // Host declaration emit: lib/types/index.d.ts + projection + shared types.
+  // Client declaration emit: lib/types/client/** + lib/types/core/**.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "noEmit": false,
@@ -9,8 +9,8 @@
     "outDir": "lib/types"
   },
   "include": [
-    "src/index.ts",
-    "src/projection.ts",
-    "src/core/question-entry.ts"
+    "src/client/**/*.ts",
+    "src/client/**/*.tsx",
+    "src/core/**/*.ts"
   ]
 }

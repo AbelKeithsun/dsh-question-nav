@@ -3,31 +3,30 @@
  *
  * Registers one surface into the frame-wide floating layer (`shell.overlay`):
  * a vertical strip on the LEFT edge of the conversation column listing every
- * user question in the current session as a small button. Clicking a button
- * scrolls the chat to that question.
+ * user question in the current session as a small button, one dot per turn.
+ * Clicking a button scrolls the chat to that turn's first question.
  *
- * The strip indexes the WHOLE session history WITHOUT expanding DSH's paged
- * render window: it pages the raw `session.history` RPC (read-only, no render
- * cost) and derives each question's chat anchor key from the event. Only when
- * a dot is clicked does the jump loop call `loadOlder()` to bring that
- * specific page into the window — so the conversation's memory economy is
- * preserved.
+ * The dots are driven by the host-folded `questionIndex` session projection
+ * (registered by the plugin's host half): the projection registry folds the
+ * WHOLE event log without touching the chat's paged render window, the
+ * projection cache persists it, and the standard carriers (history tail-page
+ * baseline + session/projection push frames) keep it live. Live-window
+ * questions not yet recorded by the projection are merged on top so a
+ * just-sent question appears immediately.
  *
  * Failure policy: nothing here throws at apply time — an external plugin must
  * never take the GUI down.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-connection/client'
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: pulls ui-layout's SlotMap merge ('shell.overlay').
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import { QuestionNavStrip, type QuestionNavInjected } from './QuestionNavStrip.tsx'
+import { QuestionNavStrip, type ObservableFace, type QuestionNavInjected } from './QuestionNavStrip.tsx'
 import { en, zh, type QuestionNavKey } from './locales.ts'
 import { extractQuestions } from '../core/nodes.ts'
 import { jumpToQuestion, type JumpFailureCode, type JumpPorts } from '../core/jump.ts'
-import { buildQuestionIndex, type HistoryIndexOptions, type HistoryIndexResult, type RawEventLike } from '../core/history-index.ts'
 
 /** Locale namespace this plugin owns. */
 const NS = 'question-nav'
@@ -40,7 +39,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services required by this plugin. */
-export const inject = ['slots', 'locale', 'sessions', 'connection']
+export const inject = ['slots', 'locale', 'sessions']
 
 /** Single-instance guard: a duplicated client injection must not mount twice. */
 declare global {
@@ -90,43 +89,18 @@ function jumpPortsFor(ctx: ClientContext, sessionId: SessionId): JumpPorts {
   }
 }
 
-/** Resolve the connection handle (shared API client) as other DSH plugins do. */
-function connectionOf(ctx: ClientContext): ConnectionHandle {
-  return ctx.get('connection') as ConnectionHandle
-}
-
 /**
- * One raw history page, mapped to the pure `buildQuestionIndex` port shape.
- * `beforeSeq` is exclusive; `undefined` reads the newest page. Returns
- * undefined when the page is unavailable so the builder stops cleanly. The
- * SDK's `SessionEvent` is cast to the structural `RawEventLike` at this
- * boundary (the index reader only touches type/seq/time/surfaceOp/data).
+ * The session's `questionIndex` projection face (getSnapshot + subscribe).
+ * Undefined when the session is not bound or the host unit is not registered
+ * (e.g. a headless composition) — the strip then shows live-window dots only.
  */
-async function rawHistoryPage(
-  ctx: ClientContext,
-  sessionId: SessionId,
-  beforeSeq: number | undefined,
-  maxMessages: number,
-): Promise<{ events: readonly { event: RawEventLike }[]; hasMore: boolean } | undefined> {
-  const { api } = connectionOf(ctx)
-  const { result } = await api.sessions.history({ sessionId, beforeSeq, maxMessages })
-  if (!result.ok) return undefined
+function questionProjectionOf(ctx: ClientContext, sessionId: SessionId): ObservableFace | undefined {
+  const face = ctx.sessions.binding(sessionId)?.session.projections.faceOf('questionIndex')
+  if (face === undefined) return undefined
   return {
-    events: result.value.events.map((entry) => ({ event: entry.event as unknown as RawEventLike })),
-    hasMore: result.value.hasMore,
+    getSnapshot: () => face.getSnapshot(),
+    subscribe: (listener) => face.subscribe(listener),
   }
-}
-
-/** Build the full-session question index from the raw history RPC (no render). */
-function buildIndexFor(
-  ctx: ClientContext,
-  sessionId: SessionId,
-  options: HistoryIndexOptions = {},
-): Promise<HistoryIndexResult> {
-  return buildQuestionIndex({
-    history: (beforeSeq, maxMessages) => rawHistoryPage(ctx, sessionId, beforeSeq, maxMessages),
-    now: () => Date.now(),
-  }, options)
 }
 
 function createInject(ctx: ClientContext): QuestionNavInjected {
@@ -142,6 +116,7 @@ function createInject(ctx: ClientContext): QuestionNavInjected {
       if (binding === undefined) return () => {}
       return binding.session.subscribe(cb)
     },
+    questionProjection: (sessionId) => questionProjectionOf(ctx, sessionId),
     jump: (sessionId, key) => {
       const ports = jumpPortsFor(ctx, sessionId)
       ports.report = (code: JumpFailureCode) => {
@@ -151,7 +126,6 @@ function createInject(ctx: ClientContext): QuestionNavInjected {
       }
       void jumpToQuestion(ports, key)
     },
-    fetchQuestionIndex: (sessionId, options) => buildIndexFor(ctx, sessionId, options),
   }
 }
 

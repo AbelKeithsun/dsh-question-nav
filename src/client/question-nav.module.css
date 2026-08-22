@@ -58,17 +58,6 @@
   background: var(--dsw-alias-brand-primary);
 }
 
-/* Dimmed placeholder for unloaded older history (below the count, above the
-   oldest question): click to page in more history. */
-.moreDot {
-  background: transparent;
-  border: 1px dashed var(--dsw-alias-border-l3);
-}
-.moreDot:hover {
-  background: var(--dsw-alias-brand-primary);
-  border-color: var(--dsw-alias-brand-primary);
-}
-
 /* Question count, rendered just above the first dot (sits in the list gap). */
 .count {
   flex: none;
@@ -77,19 +66,6 @@
   font-weight: 600;
   color: var(--dsw-alias-label-tertiary);
   user-select: none;
-}
-
-/* Ellipsis shown while the full history is being expanded. */
-.countLoading {
-  margin-left: 2px;
-  font-weight: 400;
-  color: var(--dsw-alias-brand-primary);
-  animation: qnPulse 1.2s ease-in-out infinite;
-}
-
-@keyframes qnPulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
 }
 
 /* The centered group: count + dot column, centered together (the list's auto
@@ -126,4 +102,19 @@
   white-space: normal;
   word-break: break-word;
   pointer-events: none;
+}
+
+/* Turn label line at the top of the tooltip ("Turn 32"). */
+.tooltipTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary);
+  margin-bottom: 4px;
+}
+
+/* One question text line; consecutive lines (multi-question turns) separate. */
+.tooltipLine + .tooltipLine {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
 }

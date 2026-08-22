@@ -1,24 +1,23 @@
 /**
  * Question-nav minimap. Renders a vertical column of small round dots overlaid
  * on the LEFT edge of the conversation column (via the frame-wide
- * `shell.overlay` floating layer), vertically centered: one dot per user
- * question, enlarge on hover. The instant tooltip (a portal-rendered overlay,
- * no native-title delay) shows the question's full text; clicking a dot scrolls
- * the chat to that question.
+ * `shell.overlay` floating layer), vertically centered: one dot per turn that
+ * claimed at least one user question — strictly aligned with the Trajectory
+ * view's turn numbering (turns without a question produce no dot). Hover
+ * enlarges a dot and shows an instant tooltip (portal-rendered, no native
+ * delay) with the turn label and the turn's question text(s); clicking jumps
+ * the chat to that turn's first question.
  *
- * Index strategy (no render-window expansion): the dots cover the WHOLE
- * session history. The index is built from the raw `session.history` RPC via
- * the injected `fetchQuestionIndex` — the conversation's paged window is
- * untouched, so DSH's memory economy is preserved. The loaded window's live
- * questions are merged on top (for new messages arriving after the index was
- * built). Clicking a dot jumps through the existing paging loop, which calls
- * `loadOlder()` only until that specific page is in the window. If the index
- * safety budget is exhausted, a dimmed dashed "load earlier" dot appears above
- * the oldest question and continues the index on click.
+ * Data source: the host-folded `questionIndex` session projection (whole
+ * history, persisted host-side, pushed live through session/projection
+ * frames) read through the injected `questionProjection` face, plus the live
+ * chat window's questions merged on top for the brief window before a
+ * just-sent question lands in the projection. No render-window expansion, no
+ * client-side history paging.
  *
- * Data arrives through the four props shares: the framework `useSessions`
- * hook (current session), the registrant inject face (read/subscribe/jump/
- * fetch-index), and the bound locale translator.
+ * Data arrives through the props shares: the framework `useSessions` hook
+ * (current session), the registrant inject face (read/subscribe/project/
+ * jump), and the bound locale translator.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -27,11 +26,19 @@ import type { SessionId } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: pulls the ui-layout SlotMap merge ('shell.overlay').
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { QuestionNode } from '../core/nodes.ts'
-import { mergeQuestions } from '../core/nodes.ts'
+import type { QuestionEntry } from '../core/question-entry.ts'
+import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
-import type { HistoryIndexOptions, HistoryIndexResult } from '../core/history-index.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
+
+/** Minimal observable shape of a session projection face. */
+export interface ObservableFace {
+  /** Current projection value (unknown — validated structurally at read). */
+  getSnapshot: () => unknown
+  /** Subscribe to value changes; returns an unsubscribe. */
+  subscribe: (listener: () => void) => () => void
+}
 
 /** Values the registrant inject face supplies (wired in src/client/index.ts). */
 export interface QuestionNavInjected {
@@ -41,10 +48,10 @@ export interface QuestionNavInjected {
   subscribeList: (cb: () => void) => () => void
   /** Subscribe to a session's content; returns an unsubscribe. */
   subscribeContent: (sessionId: SessionId, cb: () => void) => () => void
+  /** The session's `questionIndex` projection face, when the host unit is registered. */
+  questionProjection: (sessionId: SessionId) => ObservableFace | undefined
   /** Jump the chat to a question row (pages the window on demand). */
   jump: (sessionId: SessionId, key: string) => void
-  /** Build the full-session question index from the raw history RPC. */
-  fetchQuestionIndex: (sessionId: SessionId, options?: HistoryIndexOptions) => Promise<HistoryIndexResult>
 }
 
 type ComponentProps = PropsRuntime<'shell.overlay'> & QuestionNavInjected & PropsLocale<'question-nav'>
@@ -58,9 +65,23 @@ const FAILURE_HINTS: Record<JumpFailureCode, QuestionNavKey> = {
 
 /** Live position of the instant hover tooltip. */
 interface TooltipState {
-  text: string
+  /** Turn label line (e.g. "Turn 32"); null for ungrouped live questions. */
+  title: string | null
+  /** Question text lines (one per question folded into the dot). */
+  lines: readonly string[]
   left: number
   top: number
+}
+
+/** Read the projection face value as a question-entry list (structural guard). */
+function projectionEntries(face: ObservableFace | undefined): QuestionEntry[] {
+  const value = face?.getSnapshot()
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is QuestionEntry =>
+    typeof item === 'object' && item !== null
+    && typeof (item as QuestionEntry).id === 'string'
+    && typeof (item as QuestionEntry).seq === 'number'
+    && typeof (item as QuestionEntry).turn === 'number')
 }
 
 function findConvRoot(): HTMLElement | null {
@@ -72,22 +93,12 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const summary = props.useSessions((s) => (s.current === undefined ? undefined : s.byId[s.current]))
   const visible = current !== undefined && summary !== undefined && summary.blank !== true
 
-  const [questions, setQuestions] = useState<QuestionNode[]>([])
+  const [dots, setDots] = useState<TurnDot[]>([])
   const [jumpingKey, setJumpingKey] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
-  const [loadingIndex, setLoadingIndex] = useState(false)
-  const [moreAvailable, setMoreAvailable] = useState(false)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const hintTimerRef = useRef<number | null>(null)
-  /** Full-history index from the raw RPC (per current session). */
-  const indexRef = useRef<QuestionNode[]>([])
-  /** Next beforeSeq to resume from when the index budget was exhausted. */
-  const nextBeforeSeqRef = useRef<number | undefined>(undefined)
-  /** Abort controller for the in-flight index build. */
-  const indexAbortRef = useRef<AbortController | null>(null)
-  /** Session whose index build is in flight, to avoid duplicate loops. */
-  const buildingSessionRef = useRef<SessionId | null>(null)
 
   const showHint = (message: string): void => {
     setHint(message)
@@ -95,57 +106,25 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     hintTimerRef.current = window.setTimeout(() => setHint(null), 1800)
   }
 
-  // Build the full-history index on show; refresh the live window on content
-  // change and merge both into the dot list.
+  // Recompute the dot list from the projection + live window; subscribe to
+  // the projection push frames, session content, and the session list.
   useEffect(() => {
     if (!visible || current === undefined) {
-      indexRef.current = []
-      nextBeforeSeqRef.current = undefined
-      indexAbortRef.current?.abort()
-      indexAbortRef.current = null
-      buildingSessionRef.current = null
-      setQuestions([])
-      setLoadingIndex(false)
-      setMoreAvailable(false)
+      setDots([])
       return
     }
     const sessionId = current
-    // Reset the per-session index: this effect re-runs on session change.
-    indexRef.current = []
-    nextBeforeSeqRef.current = undefined
+    const face = props.questionProjection(sessionId)
     const refresh = (): void => {
-      const windowQuestions = props.readQuestions(sessionId)
-      setQuestions(mergeQuestions(indexRef.current, windowQuestions))
-    }
-    const startBuild = (options?: HistoryIndexOptions): void => {
-      buildingSessionRef.current = sessionId
-      const controller = new AbortController()
-      indexAbortRef.current = controller
-      setLoadingIndex(true)
-      setMoreAvailable(false)
-      props.fetchQuestionIndex(sessionId, { ...options, signal: controller.signal })
-        .then((result) => {
-          if (buildingSessionRef.current !== sessionId) return
-          indexRef.current = mergeQuestions(result.questions, indexRef.current)
-          nextBeforeSeqRef.current = result.nextBeforeSeq
-          setMoreAvailable(result.code === 'BUDGET' && result.nextBeforeSeq !== undefined)
-          refresh()
-        })
-        .finally(() => {
-          if (buildingSessionRef.current === sessionId) {
-            setLoadingIndex(false)
-            if (indexAbortRef.current === controller) indexAbortRef.current = null
-            buildingSessionRef.current = null
-          }
-        })
+      const grouped = groupQuestionsByTurn(projectionEntries(face))
+      setDots(mergeLiveQuestions(grouped, props.readQuestions(sessionId)))
     }
     refresh()
-    startBuild()
+    const unsubProjection = face?.subscribe(refresh) ?? (() => {})
     const unsubContent = props.subscribeContent(sessionId, refresh)
     const unsubList = props.subscribeList(refresh)
     return () => {
-      indexAbortRef.current?.abort()
-      indexAbortRef.current = null
+      unsubProjection()
       unsubContent()
       unsubList()
     }
@@ -208,26 +187,21 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
 
   if (!visible) return null
 
-  const onJump = (node: QuestionNode): void => {
+  const onJump = (dot: TurnDot): void => {
     if (current === undefined) return
-    setJumpingKey(node.key)
-    props.jump(current, node.key)
-    window.setTimeout(() => setJumpingKey((k) => (k === node.key ? null : k)), 600)
+    setJumpingKey(dot.key)
+    props.jump(current, dot.key)
+    window.setTimeout(() => setJumpingKey((k) => (k === dot.key ? null : k)), 600)
   }
 
-  const onLoadMore = (): void => {
-    if (current === undefined || nextBeforeSeqRef.current === undefined) return
-    setMoreAvailable(false)
-    setLoadingIndex(true)
-    props.fetchQuestionIndex(current, { startBeforeSeq: nextBeforeSeqRef.current })
-      .then((result) => {
-        if (current === undefined) return
-        indexRef.current = mergeQuestions(result.questions, indexRef.current)
-        nextBeforeSeqRef.current = result.nextBeforeSeq
-        setMoreAvailable(result.code === 'BUDGET' && result.nextBeforeSeq !== undefined)
-        setQuestions(mergeQuestions(indexRef.current, props.readQuestions(current)))
-      })
-      .finally(() => setLoadingIndex(false))
+  const openTooltip = (dot: TurnDot, target: HTMLElement): void => {
+    const r = target.getBoundingClientRect()
+    setTooltip({
+      title: dot.turn === null ? null : `Turn ${dot.turn}`,
+      lines: dot.texts,
+      left: r.right + 10,
+      top: r.top,
+    })
   }
 
   const t = props.t
@@ -236,38 +210,19 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     <div ref={panelRef} className={styles.rail} data-question-nav="rail">
       {hint !== null ? <div className={styles.hint} role="status">{hint}</div> : null}
       <div className={styles.list}>
-        {questions.length === 0 ? (
-          <div className={styles.empty}>{loadingIndex ? t('strip.loadingAll') : t('strip.empty')}</div>
+        {dots.length === 0 ? (
+          <div className={styles.empty}>{t('strip.empty')}</div>
         ) : (
           <div className={styles.dots}>
-            <span className={styles.count}>
-              {questions.length}
-              {loadingIndex ? <span className={styles.countLoading}>{t('strip.loadingSuffix')}</span> : null}
-            </span>
-            {moreAvailable && !loadingIndex ? (
+            <span className={styles.count}>{dots.length}</span>
+            {dots.map((dot) => (
               <button
-                className={`${styles.dot} ${styles.moreDot}`}
-                aria-label={t('strip.loadEarlier')}
-                title={t('strip.loadEarlier')}
-                onMouseEnter={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect()
-                  setTooltip({ text: t('strip.loadEarlier'), left: r.right + 10, top: r.top })
-                }}
+                key={dot.key}
+                className={jumpingKey === dot.key ? `${styles.dot} ${styles.active}` : styles.dot}
+                aria-label={dot.texts[0] ?? ''}
+                onMouseEnter={(e) => openTooltip(dot, e.currentTarget)}
                 onMouseLeave={() => setTooltip(null)}
-                onClick={onLoadMore}
-              />
-            ) : null}
-            {questions.map((node) => (
-              <button
-                key={node.key}
-                className={jumpingKey === node.key ? `${styles.dot} ${styles.active}` : styles.dot}
-                aria-label={node.text}
-                onMouseEnter={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect()
-                  setTooltip({ text: node.text, left: r.right + 10, top: r.top })
-                }}
-                onMouseLeave={() => setTooltip(null)}
-                onClick={() => onJump(node)}
+                onClick={() => onJump(dot)}
               />
             ))}
           </div>
@@ -276,7 +231,10 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       {tooltip !== null
         ? createPortal(
             <div className={styles.tooltip} style={{ left: tooltip.left, top: tooltip.top }}>
-              {tooltip.text}
+              {tooltip.title !== null ? <div className={styles.tooltipTitle}>{tooltip.title}</div> : null}
+              {tooltip.lines.map((line, index) => (
+                <div key={index} className={styles.tooltipLine}>{line}</div>
+              ))}
             </div>,
             document.body,
           )

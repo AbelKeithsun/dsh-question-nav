@@ -1,10 +1,27 @@
 /**
- * Host loader entry for the dsh-client-ui-question-nav plugin — runs in the
- * DSH host process. The plugin is browser-only: the row in cordis.patch.yml
- * mounts this no-op half so the loader sees a real cordis plugin, while the
- * actual UI lives in the browser half (src/client).
+ * Host half of the dsh-question-nav plugin — runs in the DSH host process.
+ * Registers the `questionIndex` session projection unit: the ordered list of
+ * user questions (each tagged with its turn), folded from the session event
+ * log by the projection registry, persisted by the projection cache, and
+ * delivered to the browser through the standard projection carriers (history
+ * tail-page baseline + session/projection push frames). The navigation UI
+ * itself lives in the browser half (src/client).
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { questionIndexProjectionDefinition } from './projection.ts'
 
-/** Apply the host half (no host behavior for this plugin). */
-export function apply(_ctx: Context): void {}
+/** Cordis plugin name. */
+export const name = 'dsh-question-nav'
+
+/**
+ * Register the `questionIndex` unit. The registry is an optional capability
+ * (absent in headless compositions), so registration rides `ctx.inject`:
+ * without it the host half simply contributes nothing and the browser strip
+ * falls back to live-window questions.
+ * @param ctx - plugin context.
+ */
+export function apply(ctx: Context): void {
+  ctx.inject(['sessionProjections'], (inner) => {
+    inner.sessionProjections.register(questionIndexProjectionDefinition)
+  })
+}

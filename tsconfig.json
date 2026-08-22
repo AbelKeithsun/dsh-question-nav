@@ -1,31 +1,14 @@
 {
-  // Self-contained compiler settings: types resolve from the @deepseek-ai/*
-  // npm SDK packages declared in devDependencies (official NPM SDK), never
-  // from a DSH source checkout.
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "jsx": "react-jsx",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "types": []
-  },
+  // Client (browser) program: the strip UI, pure core logic, and their tests.
+  "extends": "./tsconfig.base.json",
   "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
+    "src/client/**/*.ts",
+    "src/client/**/*.tsx",
+    "src/core/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx"
+  ],
+  "exclude": [
+    "tests/projection.spec.ts"
   ]
 }
