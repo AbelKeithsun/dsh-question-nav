@@ -111,3 +111,13 @@
 - 当前滚动位置对应按钮的高亮。
 - 拖拽调宽度。
 - 长会话的全量问题加载策略（loadOlder 循环的体验优化）。
+
+## 8. v0.4.0 演进：投影驱动的持久化索引，圆点严格对齐 Turn（2026-08-22）
+
+替代 v0.3.0 的客户端原始 history RPC 扫描索引（内存态、切会话即弃）：
+
+- **Host 半面注册 `questionIndex` 投影单元**（`ctx.sessionProjections.register`）：state `{turn, questions: [{turn,id,seq,time,text}]}`；`turn/start` 记轮次；`user/message` + `surfaceOp==='append'` + `source.kind==='user'` 追加提问；无关事件返回同引用（Object.is 闸门）；`stateVersion: 1`。
+- **持久化交给官方 projection-cache**（web-app 已挂载，`~/.dsh/storages/session_projcache.json` 每会话一行）：turn/end 与 detach 必写，崩溃只损失尾部回放；跨重启、跨浏览器。
+- **客户端走官方通道**：`session.projections.faceOf('questionIndex')`（ObservableSnapshot：history 尾页播种 + `session/projection` 推送帧实时更新），`useSyncExternalStore` 订阅；删除 history-index 整套（RPC 分页/预算/取消/加载更早圆点）。
+- **圆点严格对齐 Turn**：一轮含提问的 turn 一个圆点（多条提问折叠，tooltip 列出全部，标注 `Turn N`）；无提问的轮（重试/goal 续跑/空轮）无圆点，允许跳号，与轨迹视图编号永远一致。anchor key 客户端推导（`13:input-message${id}`），跳转逻辑不变。
+- 快照之后新来的提问（尚未入投影帧）以独立圆点附加在末尾，归位靠投影推送帧。
