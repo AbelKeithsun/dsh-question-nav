@@ -4,6 +4,9 @@
  */
 export const zh = {
   'strip.empty': '本会话还没有提问',
+  'strip.loadingAll': '正在加载全部历史…',
+  'strip.loadingSuffix': '…',
+  'strip.loadEarlier': '加载更早的问题',
   'jump.inactive': '聊天视图未激活',
   'jump.hidden': '目标无独立气泡，已定位到邻近内容',
   'jump.notfound': '目标未加载或不存在（可能已压缩）',
@@ -12,6 +15,9 @@ export const zh = {
 
 export const en = {
   'strip.empty': 'No questions in this session yet',
+  'strip.loadingAll': 'Loading full history…',
+  'strip.loadingSuffix': '…',
+  'strip.loadEarlier': 'Load earlier questions',
   'jump.inactive': 'Chat view is not active',
   'jump.hidden': 'No dedicated bubble; landed on nearby content',
   'jump.notfound': 'Target not loaded or missing (maybe compacted)',

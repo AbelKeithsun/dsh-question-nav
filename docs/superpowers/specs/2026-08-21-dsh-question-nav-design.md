@@ -36,6 +36,14 @@
 - 用户提问节点：`kind === 'user'`（轮首用户提问）；`kind === 'steering'`（并入进行中回合的用户消息）作为可选纳入。
 - 按钮文本：取节点 `content` 首块文本，截断。
 
+> **全量历史（v0.2.0 增补）**：DSH 会话按 50 条/页分页加载，`chat.nodes`
+> 只含**当前已加载窗口**，"加载更早"按钮之后的老提问在扩窗前不进入节点存储，
+> 圆点索引不到。为此条带在显示时自动 `loadOlder()` 循环扩窗直至 `hasMore ===
+> false`（`src/core/load-all.ts`），使全部历史问题都变成圆点；扩窗期间数量后
+> 显示 "…"，超出安全预算（400 页 / 60s）时在最老问题上方给出虚线"加载更早"
+> 圆点，点击继续。扩窗的 `loadOlder` 带滚动位置保持（按 scrollHeight 增量补偿），
+> 避免预插内容把当前阅读位置顶下去。
+
 ### 3.2 放置方式（复用 dsh-trail 已验证的 `shell.overlay` 通道）
 
 - `ctx.slots.register({ name: 'shell.overlay', ... }, QuestionNavStrip)` 注册进帧级浮层 list 插槽（`ui-layout` 声明，additive）。

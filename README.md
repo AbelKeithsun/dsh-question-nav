@@ -17,6 +17,11 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm]).
 - **Left-edge dot minimap** (embedded, not reserving any width).
 - **Vertically centered** in the conversation column.
 - **One dot = one user question**, with a small count above the dot column.
+- **Full history**: on show, the strip auto-expands the session's older pages
+  (paging DSH's own "load older" window) so even questions that are still
+  collapsed behind the load-more button surface as dots. While expanding, the
+  count shows a "…" affordance; if the safety budget is exhausted a dimmed
+  dashed dot above the oldest question offers "load earlier" on click.
 - **Hover**: the dot enlarges and an instant tooltip (portal-rendered, no
   native-title delay) shows the question's **full text**.
 - **Click**: jumps to that question, paging older history when the target is

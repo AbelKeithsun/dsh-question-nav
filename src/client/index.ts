@@ -1,10 +1,12 @@
 /**
- * Browser-half entry for the dsh-client-ui-question-nav plugin.
+ * Browser-half entry for the dsh-question-nav plugin.
  *
  * Registers one surface into the frame-wide floating layer (`shell.overlay`):
- * a vertical strip on the right edge of the conversation column listing every
+ * a vertical strip on the LEFT edge of the conversation column listing every
  * user question in the current session as a small button. Clicking a button
- * scrolls the chat to that question (paging older history when needed).
+ * scrolls the chat to that question (paging older history when needed). The
+ * strip auto-expands the whole session history so even collapsed older
+ * questions are surfaced as dots.
  *
  * Failure policy: nothing here throws at apply time — an external plugin must
  * never take the GUI down.
@@ -19,6 +21,7 @@ import { QuestionNavStrip, type QuestionNavInjected } from './QuestionNavStrip.t
 import { en, zh, type QuestionNavKey } from './locales.ts'
 import { extractQuestions } from '../core/nodes.ts'
 import { jumpToQuestion, type JumpFailureCode, type JumpPorts } from '../core/jump.ts'
+import { loadAllOlder, type LoadAllOptions, type LoadAllResult } from '../core/load-all.ts'
 
 /** Locale namespace this plugin owns. */
 const NS = 'question-nav'
@@ -81,6 +84,52 @@ function jumpPortsFor(ctx: ClientContext, sessionId: SessionId): JumpPorts {
   }
 }
 
+/** Resolve the active conversation scrollport (or null when not mounted). */
+function scrollport(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-conversation-scroll]')
+}
+
+/**
+ * One backward page that preserves the reader's scroll position. DSH's own
+ * "load older" button arms a paging anchor; a programmatic `loadOlder()` does
+ * not, so without this compensation prepended content would push the visible
+ * rows down. We restore by the exact growth of the scrollHeight.
+ */
+async function pagedLoadOlder(ctx: ClientContext, sessionId: SessionId): Promise<void> {
+  const binding = ctx.sessions.binding(sessionId)
+  if (binding === undefined) return
+  const port = scrollport()
+  const beforeHeight = port?.scrollHeight ?? 0
+  const beforeTop = port?.scrollTop ?? 0
+  await binding.session.loadOlder()
+  if (port === null) return
+  // Let React commit the prepend before measuring the new height.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  const delta = port.scrollHeight - beforeHeight
+  if (delta > 0) port.scrollTop = beforeTop + delta
+}
+
+/** Map the session to the load-all port surface. */
+function loadAllPortsFor(ctx: ClientContext, sessionId: SessionId): Parameters<typeof loadAllOlder>[0] {
+  return {
+    snapshot: () => {
+      const binding = ctx.sessions.binding(sessionId)
+      const snap = binding?.session.getSnapshot()
+      if (snap === undefined) return undefined
+      return { openState: snap.openState, hasMore: snap.hasMore, loadingOlder: snap.loadingOlder }
+    },
+    loadOlder: () => pagedLoadOlder(ctx, sessionId),
+    isViewActive: () => document.querySelector('[data-chat-flow]') !== null,
+    now: () => Date.now(),
+    sleep: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
+  }
+}
+
+/** Expand the whole session history so every question becomes a dot. */
+function loadAllFor(ctx: ClientContext, sessionId: SessionId, options: LoadAllOptions = {}): Promise<LoadAllResult> {
+  return loadAllOlder(loadAllPortsFor(ctx, sessionId), options)
+}
+
 function createInject(ctx: ClientContext): QuestionNavInjected {
   return {
     readQuestions: (sessionId) => {
@@ -103,6 +152,7 @@ function createInject(ctx: ClientContext): QuestionNavInjected {
       }
       void jumpToQuestion(ports, key)
     },
+    loadAllOlder: (sessionId, options) => loadAllFor(ctx, sessionId, options),
   }
 }
 
