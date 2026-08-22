@@ -16,16 +16,16 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm]).
 
 - **Left-edge dot minimap** (embedded, not reserving any width).
 - **Vertically centered** in the conversation column.
-- **One dot = one user question**, with a small count above the dot column.
-- **Full history, no render-window expansion**: the index is built by paging
-  the raw `session.history` RPC (read-only), so every question in the session —
-  including ones still collapsed behind DSH's "load older" button — appears as
-  a dot without expanding the conversation's paged window (memory economy
-  preserved). While the index is building the count shows a "…"; if the safety
-  budget is exhausted a dimmed dashed dot above the oldest question offers
-  "load earlier" on click.
+- **One dot = one turn that asked a question** (strictly aligned with the
+  Trajectory view's turn numbering), with a small count above the dot column.
+- **Full history, persisted, no render-window expansion**: the plugin's host
+  half registers a `questionIndex` session projection — the projection
+  registry folds the whole event log (read-only, the chat's paged window is
+  never touched), the official projection cache persists it across restarts,
+  and push frames deliver new questions live.
 - **Hover**: the dot enlarges and an instant tooltip (portal-rendered, no
-  native-title delay) shows the question's **full text**.
+  native-title delay) shows the **turn label** (`Turn N`) plus the turn's
+  **full question text** (all of them, when one turn batched several).
 - **Click**: jumps to that question. Only then does the jump loop page the
   window (`loadOlder()`) to bring that specific page into view — never the
   whole history up front.
