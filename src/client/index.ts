@@ -4,15 +4,21 @@
  * Registers one surface into the frame-wide floating layer (`shell.overlay`):
  * a vertical strip on the LEFT edge of the conversation column listing every
  * user question in the current session as a small button. Clicking a button
- * scrolls the chat to that question (paging older history when needed). The
- * strip auto-expands the whole session history so even collapsed older
- * questions are surfaced as dots.
+ * scrolls the chat to that question.
+ *
+ * The strip indexes the WHOLE session history WITHOUT expanding DSH's paged
+ * render window: it pages the raw `session.history` RPC (read-only, no render
+ * cost) and derives each question's chat anchor key from the event. Only when
+ * a dot is clicked does the jump loop call `loadOlder()` to bring that
+ * specific page into the window — so the conversation's memory economy is
+ * preserved.
  *
  * Failure policy: nothing here throws at apply time — an external plugin must
  * never take the GUI down.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-connection/client'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: pulls ui-layout's SlotMap merge ('shell.overlay').
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -21,7 +27,7 @@ import { QuestionNavStrip, type QuestionNavInjected } from './QuestionNavStrip.t
 import { en, zh, type QuestionNavKey } from './locales.ts'
 import { extractQuestions } from '../core/nodes.ts'
 import { jumpToQuestion, type JumpFailureCode, type JumpPorts } from '../core/jump.ts'
-import { loadAllOlder, type LoadAllOptions, type LoadAllResult } from '../core/load-all.ts'
+import { buildQuestionIndex, type HistoryIndexOptions, type HistoryIndexResult, type RawEventLike } from '../core/history-index.ts'
 
 /** Locale namespace this plugin owns. */
 const NS = 'question-nav'
@@ -34,7 +40,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services required by this plugin. */
-export const inject = ['slots', 'locale', 'sessions']
+export const inject = ['slots', 'locale', 'sessions', 'connection']
 
 /** Single-instance guard: a duplicated client injection must not mount twice. */
 declare global {
@@ -84,50 +90,43 @@ function jumpPortsFor(ctx: ClientContext, sessionId: SessionId): JumpPorts {
   }
 }
 
-/** Resolve the active conversation scrollport (or null when not mounted). */
-function scrollport(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[data-conversation-scroll]')
+/** Resolve the connection handle (shared API client) as other DSH plugins do. */
+function connectionOf(ctx: ClientContext): ConnectionHandle {
+  return ctx.get('connection') as ConnectionHandle
 }
 
 /**
- * One backward page that preserves the reader's scroll position. DSH's own
- * "load older" button arms a paging anchor; a programmatic `loadOlder()` does
- * not, so without this compensation prepended content would push the visible
- * rows down. We restore by the exact growth of the scrollHeight.
+ * One raw history page, mapped to the pure `buildQuestionIndex` port shape.
+ * `beforeSeq` is exclusive; `undefined` reads the newest page. Returns
+ * undefined when the page is unavailable so the builder stops cleanly. The
+ * SDK's `SessionEvent` is cast to the structural `RawEventLike` at this
+ * boundary (the index reader only touches type/seq/time/surfaceOp/data).
  */
-async function pagedLoadOlder(ctx: ClientContext, sessionId: SessionId): Promise<void> {
-  const binding = ctx.sessions.binding(sessionId)
-  if (binding === undefined) return
-  const port = scrollport()
-  const beforeHeight = port?.scrollHeight ?? 0
-  const beforeTop = port?.scrollTop ?? 0
-  await binding.session.loadOlder()
-  if (port === null) return
-  // Let React commit the prepend before measuring the new height.
-  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-  const delta = port.scrollHeight - beforeHeight
-  if (delta > 0) port.scrollTop = beforeTop + delta
-}
-
-/** Map the session to the load-all port surface. */
-function loadAllPortsFor(ctx: ClientContext, sessionId: SessionId): Parameters<typeof loadAllOlder>[0] {
+async function rawHistoryPage(
+  ctx: ClientContext,
+  sessionId: SessionId,
+  beforeSeq: number | undefined,
+  maxMessages: number,
+): Promise<{ events: readonly { event: RawEventLike }[]; hasMore: boolean } | undefined> {
+  const { api } = connectionOf(ctx)
+  const { result } = await api.sessions.history({ sessionId, beforeSeq, maxMessages })
+  if (!result.ok) return undefined
   return {
-    snapshot: () => {
-      const binding = ctx.sessions.binding(sessionId)
-      const snap = binding?.session.getSnapshot()
-      if (snap === undefined) return undefined
-      return { openState: snap.openState, hasMore: snap.hasMore, loadingOlder: snap.loadingOlder }
-    },
-    loadOlder: () => pagedLoadOlder(ctx, sessionId),
-    isViewActive: () => document.querySelector('[data-chat-flow]') !== null,
-    now: () => Date.now(),
-    sleep: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
+    events: result.value.events.map((entry) => ({ event: entry.event as unknown as RawEventLike })),
+    hasMore: result.value.hasMore,
   }
 }
 
-/** Expand the whole session history so every question becomes a dot. */
-function loadAllFor(ctx: ClientContext, sessionId: SessionId, options: LoadAllOptions = {}): Promise<LoadAllResult> {
-  return loadAllOlder(loadAllPortsFor(ctx, sessionId), options)
+/** Build the full-session question index from the raw history RPC (no render). */
+function buildIndexFor(
+  ctx: ClientContext,
+  sessionId: SessionId,
+  options: HistoryIndexOptions = {},
+): Promise<HistoryIndexResult> {
+  return buildQuestionIndex({
+    history: (beforeSeq, maxMessages) => rawHistoryPage(ctx, sessionId, beforeSeq, maxMessages),
+    now: () => Date.now(),
+  }, options)
 }
 
 function createInject(ctx: ClientContext): QuestionNavInjected {
@@ -152,7 +151,7 @@ function createInject(ctx: ClientContext): QuestionNavInjected {
       }
       void jumpToQuestion(ports, key)
     },
-    loadAllOlder: (sessionId, options) => loadAllFor(ctx, sessionId, options),
+    fetchQuestionIndex: (sessionId, options) => buildIndexFor(ctx, sessionId, options),
   }
 }
 

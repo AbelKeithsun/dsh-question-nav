@@ -6,15 +6,19 @@
  * no native-title delay) shows the question's full text; clicking a dot scrolls
  * the chat to that question.
  *
- * Dots index the WHOLE session history, not just the currently loaded window:
- * on show, the strip auto-expands older pages (`loadAllOlder`) so questions
- * that still sit behind DSH's "load older" button are surfaced too. While the
- * expansion is running the count shows a "…" affordance; if the safety budget
- * is exhausted a dimmed "load earlier" dot appears above the oldest question.
+ * Index strategy (no render-window expansion): the dots cover the WHOLE
+ * session history. The index is built from the raw `session.history` RPC via
+ * the injected `fetchQuestionIndex` — the conversation's paged window is
+ * untouched, so DSH's memory economy is preserved. The loaded window's live
+ * questions are merged on top (for new messages arriving after the index was
+ * built). Clicking a dot jumps through the existing paging loop, which calls
+ * `loadOlder()` only until that specific page is in the window. If the index
+ * safety budget is exhausted, a dimmed dashed "load earlier" dot appears above
+ * the oldest question and continues the index on click.
  *
  * Data arrives through the four props shares: the framework `useSessions`
  * hook (current session), the registrant inject face (read/subscribe/jump/
- * load-all), and the bound locale translator.
+ * fetch-index), and the bound locale translator.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -23,23 +27,24 @@ import type { SessionId } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: pulls the ui-layout SlotMap merge ('shell.overlay').
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { QuestionNode } from '../core/nodes.ts'
+import { mergeQuestions } from '../core/nodes.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
-import type { LoadAllOptions, LoadAllResult } from '../core/load-all.ts'
+import type { HistoryIndexOptions, HistoryIndexResult } from '../core/history-index.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
 
 /** Values the registrant inject face supplies (wired in src/client/index.ts). */
 export interface QuestionNavInjected {
-  /** Extract the user questions of a session (current loaded window). */
+  /** Extract the user questions of a session's currently loaded window. */
   readQuestions: (sessionId: SessionId) => QuestionNode[]
   /** Subscribe to the session list; returns an unsubscribe. */
   subscribeList: (cb: () => void) => () => void
   /** Subscribe to a session's content; returns an unsubscribe. */
   subscribeContent: (sessionId: SessionId, cb: () => void) => () => void
-  /** Jump the chat to a question row. */
+  /** Jump the chat to a question row (pages the window on demand). */
   jump: (sessionId: SessionId, key: string) => void
-  /** Expand the session history until every question is loaded. */
-  loadAllOlder: (sessionId: SessionId, options?: LoadAllOptions) => Promise<LoadAllResult>
+  /** Build the full-session question index from the raw history RPC. */
+  fetchQuestionIndex: (sessionId: SessionId, options?: HistoryIndexOptions) => Promise<HistoryIndexResult>
 }
 
 type ComponentProps = PropsRuntime<'shell.overlay'> & QuestionNavInjected & PropsLocale<'question-nav'>
@@ -71,14 +76,18 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const [jumpingKey, setJumpingKey] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
-  const [loadingAll, setLoadingAll] = useState(false)
+  const [loadingIndex, setLoadingIndex] = useState(false)
   const [moreAvailable, setMoreAvailable] = useState(false)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const hintTimerRef = useRef<number | null>(null)
-  /** Abort controller for the in-flight expansion (cancelled on session change). */
-  const loadAllAbortRef = useRef<AbortController | null>(null)
-  /** Session whose expansion is already running, to avoid duplicate loops. */
-  const loadingAllSessionRef = useRef<SessionId | null>(null)
+  /** Full-history index from the raw RPC (per current session). */
+  const indexRef = useRef<QuestionNode[]>([])
+  /** Next beforeSeq to resume from when the index budget was exhausted. */
+  const nextBeforeSeqRef = useRef<number | undefined>(undefined)
+  /** Abort controller for the in-flight index build. */
+  const indexAbortRef = useRef<AbortController | null>(null)
+  /** Session whose index build is in flight, to avoid duplicate loops. */
+  const buildingSessionRef = useRef<SessionId | null>(null)
 
   const showHint = (message: string): void => {
     setHint(message)
@@ -86,52 +95,61 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     hintTimerRef.current = window.setTimeout(() => setHint(null), 1800)
   }
 
-  // Refresh the question list whenever the current session or its content changes.
+  // Build the full-history index on show; refresh the live window on content
+  // change and merge both into the dot list.
   useEffect(() => {
     if (!visible || current === undefined) {
+      indexRef.current = []
+      nextBeforeSeqRef.current = undefined
+      indexAbortRef.current?.abort()
+      indexAbortRef.current = null
+      buildingSessionRef.current = null
       setQuestions([])
-      return
-    }
-    const refresh = (): void => setQuestions(props.readQuestions(current))
-    refresh()
-    const unsubContent = props.subscribeContent(current, refresh)
-    const unsubList = props.subscribeList(refresh)
-    return () => {
-      unsubContent()
-      unsubList()
-    }
-  }, [visible, current, props])
-
-  // Auto-expand the full history so collapsed older questions surface as dots.
-  // Runs once per session; the session notifier drives the list refresh above.
-  useEffect(() => {
-    if (!visible || current === undefined) {
-      loadAllAbortRef.current?.abort()
-      loadAllAbortRef.current = null
-      loadingAllSessionRef.current = null
-      setLoadingAll(false)
+      setLoadingIndex(false)
       setMoreAvailable(false)
       return
     }
-    if (loadingAllSessionRef.current === current) return
-    loadingAllSessionRef.current = current
-    const controller = new AbortController()
-    loadAllAbortRef.current = controller
-    setLoadingAll(true)
-    setMoreAvailable(false)
-    props.loadAllOlder(current, { signal: controller.signal })
-      .then((result) => {
-        // Budget exhausted but more history still exists: offer "load earlier".
-        setMoreAvailable(result.code === 'BUDGET' && !result.ok)
-      })
-      .finally(() => {
-        setLoadingAll(false)
-        if (loadAllAbortRef.current === controller) loadAllAbortRef.current = null
-        loadingAllSessionRef.current = null
-      })
-    return () => {
-      controller.abort()
+    const sessionId = current
+    // Reset the per-session index: this effect re-runs on session change.
+    indexRef.current = []
+    nextBeforeSeqRef.current = undefined
+    const refresh = (): void => {
+      const windowQuestions = props.readQuestions(sessionId)
+      setQuestions(mergeQuestions(indexRef.current, windowQuestions))
     }
+    const startBuild = (options?: HistoryIndexOptions): void => {
+      buildingSessionRef.current = sessionId
+      const controller = new AbortController()
+      indexAbortRef.current = controller
+      setLoadingIndex(true)
+      setMoreAvailable(false)
+      props.fetchQuestionIndex(sessionId, { ...options, signal: controller.signal })
+        .then((result) => {
+          if (buildingSessionRef.current !== sessionId) return
+          indexRef.current = mergeQuestions(result.questions, indexRef.current)
+          nextBeforeSeqRef.current = result.nextBeforeSeq
+          setMoreAvailable(result.code === 'BUDGET' && result.nextBeforeSeq !== undefined)
+          refresh()
+        })
+        .finally(() => {
+          if (buildingSessionRef.current === sessionId) {
+            setLoadingIndex(false)
+            if (indexAbortRef.current === controller) indexAbortRef.current = null
+            buildingSessionRef.current = null
+          }
+        })
+    }
+    refresh()
+    startBuild()
+    const unsubContent = props.subscribeContent(sessionId, refresh)
+    const unsubList = props.subscribeList(refresh)
+    return () => {
+      indexAbortRef.current?.abort()
+      indexAbortRef.current = null
+      unsubContent()
+      unsubList()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, current, props])
 
   // Listen for jump-failure events and surface the hint.
@@ -198,14 +216,18 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   }
 
   const onLoadMore = (): void => {
-    if (current === undefined) return
+    if (current === undefined || nextBeforeSeqRef.current === undefined) return
     setMoreAvailable(false)
-    setLoadingAll(true)
-    props.loadAllOlder(current)
+    setLoadingIndex(true)
+    props.fetchQuestionIndex(current, { startBeforeSeq: nextBeforeSeqRef.current })
       .then((result) => {
-        setMoreAvailable(result.code === 'BUDGET' && !result.ok)
+        if (current === undefined) return
+        indexRef.current = mergeQuestions(result.questions, indexRef.current)
+        nextBeforeSeqRef.current = result.nextBeforeSeq
+        setMoreAvailable(result.code === 'BUDGET' && result.nextBeforeSeq !== undefined)
+        setQuestions(mergeQuestions(indexRef.current, props.readQuestions(current)))
       })
-      .finally(() => setLoadingAll(false))
+      .finally(() => setLoadingIndex(false))
   }
 
   const t = props.t
@@ -215,14 +237,14 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       {hint !== null ? <div className={styles.hint} role="status">{hint}</div> : null}
       <div className={styles.list}>
         {questions.length === 0 ? (
-          <div className={styles.empty}>{loadingAll ? t('strip.loadingAll') : t('strip.empty')}</div>
+          <div className={styles.empty}>{loadingIndex ? t('strip.loadingAll') : t('strip.empty')}</div>
         ) : (
           <div className={styles.dots}>
             <span className={styles.count}>
               {questions.length}
-              {loadingAll ? <span className={styles.countLoading}>{t('strip.loadingSuffix')}</span> : null}
+              {loadingIndex ? <span className={styles.countLoading}>{t('strip.loadingSuffix')}</span> : null}
             </span>
-            {moreAvailable && !loadingAll ? (
+            {moreAvailable && !loadingIndex ? (
               <button
                 className={`${styles.dot} ${styles.moreDot}`}
                 aria-label={t('strip.loadEarlier')}

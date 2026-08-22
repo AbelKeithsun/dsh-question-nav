@@ -96,3 +96,17 @@ export function nearestRenderable(
   }
   return best
 }
+
+/**
+ * Merge two question sets (full-history index + live loaded window) into one
+ * deduplicated, anchorSeq-ascending list. The window may hold questions that
+ * arrived after the index was built; the index may hold questions the window
+ * has not loaded yet — union on `key`, newest live copy wins per key.
+ */
+export function mergeQuestions(...sources: readonly (readonly QuestionNode[])[]): QuestionNode[] {
+  const byKey = new Map<string, QuestionNode>()
+  for (const source of sources) {
+    for (const node of source) byKey.set(node.key, node)
+  }
+  return [...byKey.values()].sort((a, b) => a.anchorSeq - b.anchorSeq)
+}

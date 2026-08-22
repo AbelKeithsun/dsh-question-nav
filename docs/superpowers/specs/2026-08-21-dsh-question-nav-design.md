@@ -36,13 +36,21 @@
 - 用户提问节点：`kind === 'user'`（轮首用户提问）；`kind === 'steering'`（并入进行中回合的用户消息）作为可选纳入。
 - 按钮文本：取节点 `content` 首块文本，截断。
 
-> **全量历史（v0.2.0 增补）**：DSH 会话按 50 条/页分页加载，`chat.nodes`
-> 只含**当前已加载窗口**，"加载更早"按钮之后的老提问在扩窗前不进入节点存储，
-> 圆点索引不到。为此条带在显示时自动 `loadOlder()` 循环扩窗直至 `hasMore ===
-> false`（`src/core/load-all.ts`），使全部历史问题都变成圆点；扩窗期间数量后
-> 显示 "…"，超出安全预算（400 页 / 60s）时在最老问题上方给出虚线"加载更早"
-> 圆点，点击继续。扩窗的 `loadOlder` 带滚动位置保持（按 scrollHeight 增量补偿），
-> 避免预插内容把当前阅读位置顶下去。
+> **全量历史（v0.2.0 → v0.3.0 演进）**：DSH 会话按 50 条/页分页加载，
+> `chat.nodes` 只含**当前已加载窗口**，"加载更早"按钮之后的老提问在扩窗前
+> 不进入节点存储，圆点索引不到。
+>
+> - v0.2.0 曾用 `loadOlder()` 循环扩窗直至 `hasMore === false` 来索引全部提问，
+>   但会把整个历史物化进渲染窗口（ChatView 全量渲染）——**破坏 DSH 分页的
+>   内存经济性**，长会话有明显性能风险。
+> - v0.3.0 改为**预取索引**：通过原始历史 RPC
+>   `ctx.connection.api.sessions.history({ sessionId, beforeSeq, maxMessages })`
+>   从 host 分页读取日志（只读，**不触碰渲染窗口**），用
+>   `conversationContextKey('input-message', String(event.data.id))` 推导每个
+>   提问的 chat anchor key（`src/core/history-index.ts`），只保留
+>   `{key, seq, time, text}`。点某圆点时才由跳转循环 `loadOlder()` 把那一页
+>   带进视图（按需展开）。索引超安全预算时最老提问上方给出虚线"加载更早"
+>   圆点，点击续取。
 
 ### 3.2 放置方式（复用 dsh-trail 已验证的 `shell.overlay` 通道）
 

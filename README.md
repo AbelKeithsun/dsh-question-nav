@@ -17,15 +17,18 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm]).
 - **Left-edge dot minimap** (embedded, not reserving any width).
 - **Vertically centered** in the conversation column.
 - **One dot = one user question**, with a small count above the dot column.
-- **Full history**: on show, the strip auto-expands the session's older pages
-  (paging DSH's own "load older" window) so even questions that are still
-  collapsed behind the load-more button surface as dots. While expanding, the
-  count shows a "…" affordance; if the safety budget is exhausted a dimmed
-  dashed dot above the oldest question offers "load earlier" on click.
+- **Full history, no render-window expansion**: the index is built by paging
+  the raw `session.history` RPC (read-only), so every question in the session —
+  including ones still collapsed behind DSH's "load older" button — appears as
+  a dot without expanding the conversation's paged window (memory economy
+  preserved). While the index is building the count shows a "…"; if the safety
+  budget is exhausted a dimmed dashed dot above the oldest question offers
+  "load earlier" on click.
 - **Hover**: the dot enlarges and an instant tooltip (portal-rendered, no
   native-title delay) shows the question's **full text**.
-- **Click**: jumps to that question, paging older history when the target is
-  not yet in the loaded window (with a nearest-row fallback).
+- **Click**: jumps to that question. Only then does the jump loop page the
+  window (`loadOlder()`) to bring that specific page into view — never the
+  whole history up front.
 - Empty/left areas of the rail pass pointer events through to the conversation
   (it never blocks the chat).
 
