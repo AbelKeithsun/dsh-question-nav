@@ -88,6 +88,22 @@ function findConvRoot(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-slot="conversation"] > div[data-phase]')
 }
 
+/** Structural equality of two dot lists (member keys fully capture a dot's
+ * folded questions, so identical key sequences mean identical content).
+ * Lets the strip skip a re-render when a refresh produced no change. */
+function sameDots(a: readonly TurnDot[], b: readonly TurnDot[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const da = a[i]
+    const db = b[i]
+    if (da.key !== db.key || da.memberKeys.length !== db.memberKeys.length) return false
+    for (let j = 0; j < da.memberKeys.length; j++) {
+      if (da.memberKeys[j] !== db.memberKeys[j]) return false
+    }
+  }
+  return true
+}
+
 export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | null {
   const current = props.useSessions((s) => s.current)
   const summary = props.useSessions((s) => (s.current === undefined ? undefined : s.byId[s.current]))
@@ -99,6 +115,8 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const hintTimerRef = useRef<number | null>(null)
+  // Last rendered dot list, for the change-detection bail-out below.
+  const lastDotsRef = useRef<TurnDot[]>([])
 
   const showHint = (message: string): void => {
     setHint(message)
@@ -106,27 +124,38 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     hintTimerRef.current = window.setTimeout(() => setHint(null), 1800)
   }
 
-  // Recompute the dot list from the projection + live window; subscribe to
-  // the projection push frames, session content, and the session list.
+  // Recompute the dot list from the projection + live window. Subscribed to
+  // the projection push frames and the session's content only — session
+  // switches are covered by `current` below (the effect re-runs on change),
+  // so the session-list feed is not subscribed: it would re-run the full
+  // recompute for unrelated list churn.
   useEffect(() => {
     if (!visible || current === undefined) {
       setDots([])
+      lastDotsRef.current = []
       return
     }
     const sessionId = current
     const face = props.questionProjection(sessionId)
     const refresh = (): void => {
       const grouped = groupQuestionsByTurn(projectionEntries(face))
-      setDots(mergeLiveQuestions(grouped, props.readQuestions(sessionId)))
+      const next = mergeLiveQuestions(grouped, props.readQuestions(sessionId))
+      // Identical content (a streaming update that added no question): re-use
+      // the previous array reference so React bails out of re-rendering the
+      // strip — the common case during assistant streaming.
+      if (sameDots(next, lastDotsRef.current)) {
+        setDots(lastDotsRef.current)
+        return
+      }
+      lastDotsRef.current = next
+      setDots(next)
     }
     refresh()
     const unsubProjection = face?.subscribe(refresh) ?? (() => {})
     const unsubContent = props.subscribeContent(sessionId, refresh)
-    const unsubList = props.subscribeList(refresh)
     return () => {
       unsubProjection()
       unsubContent()
-      unsubList()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, current, props])
@@ -143,40 +172,90 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
 
   // Anchor the minimap to the conversation column: position it at the left
   // edge of the conversation root and reserve a thin rail with padding-left.
+  //
+  // A layout-correction loop keeps the rail pinned to the conversation even
+  // when an outside panel (e.g. a browser-extension sidebar like Doubao) moves
+  // or resizes the frame without resizing the browser window: `window resize`
+  // never fires for in-page panels, and a ResizeObserver on the conversation
+  // root alone misses remounts and the tail of the frame's grid-column
+  // transition, which used to leave the rail drifting into the session list.
+  // The loop runs while the layout is still moving, then parks itself after a
+  // few stable frames; observers re-wake it on the next change.
   useLayoutEffect(() => {
     if (!visible) return
     let raf = 0
-    let retries = 0
-    const applyLayout = (): void => {
+    let idle = 0
+    let stopped = false
+    let observer: ResizeObserver | null = null
+    const observed = { frame: null as Element | null, convRoot: null as Element | null }
+
+    const applyLayout = (): boolean => {
       const panel = panelRef.current
-      if (panel === null) return
+      if (panel === null) return false
       const frame = panel.closest('[data-shell-overlay]')?.parentElement ?? null
       const convRoot = findConvRoot()
-      if (frame === null || convRoot === null) return
+      // Keep looping while the anchors are not both present (conversation not
+      // mounted yet / mid-reflow), so a late mount still aligns.
+      if (frame === null || convRoot === null) return true
+      // Keep observing the live nodes: the conversation root may remount
+      // (e.g. after a panel-triggered reflow), which silently detaches an
+      // earlier ResizeObserver target.
+      if (observer !== null) {
+        if (observed.frame !== frame) {
+          observer.observe(frame, { box: 'border-box' })
+          observed.frame = frame
+        }
+        if (observed.convRoot !== convRoot) {
+          observer.observe(convRoot, { box: 'border-box' })
+          observed.convRoot = convRoot
+        }
+      }
       const frameRect = frame.getBoundingClientRect()
       const convRect = convRoot.getBoundingClientRect()
-      if (convRect.height <= 0) {
-        if (retries < 20) {
-          retries += 1
-          raf = requestAnimationFrame(applyLayout)
-        }
-        return
+      // Never snap onto a transient box: keep correcting until the
+      // conversation has a real footprint again.
+      if (convRect.height <= 0 || convRect.width <= 0) return true
+      const top = `${convRect.top - frameRect.top}px`
+      const height = `${convRect.height}px`
+      const left = `${convRect.left - frameRect.left}px`
+      if (panel.style.top === top && panel.style.height === height && panel.style.left === left) {
+        return false
       }
-      retries = 0
-      panel.style.top = `${convRect.top - frameRect.top}px`
-      panel.style.height = `${convRect.height}px`
-      panel.style.left = `${convRect.left - frameRect.left}px`
+      panel.style.top = top
+      panel.style.height = height
+      panel.style.left = left
+      return true
     }
-    applyLayout()
-    raf = requestAnimationFrame(applyLayout)
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(applyLayout)
-    const convRoot = findConvRoot()
-    observer?.observe(convRoot ?? document.body, { box: 'border-box' })
-    window.addEventListener('resize', applyLayout)
+
+    const loop = (): void => {
+      if (stopped) return
+      raf = 0
+      idle = applyLayout() ? 0 : idle + 1
+      if (idle < 3) raf = requestAnimationFrame(loop)
+    }
+    const wake = (): void => {
+      if (stopped) return
+      idle = 0
+      if (raf === 0) raf = requestAnimationFrame(loop)
+    }
+
+    observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(wake)
+    if (observer !== null) {
+      const panel = panelRef.current
+      const frame = panel?.closest('[data-shell-overlay]')?.parentElement ?? null
+      const convRoot = findConvRoot()
+      if (frame !== null) { observer.observe(frame, { box: 'border-box' }); observed.frame = frame }
+      if (convRoot !== null) { observer.observe(convRoot, { box: 'border-box' }); observed.convRoot = convRoot }
+    }
+
+    // Initial alignment; the loop keeps correcting through layout transitions.
+    wake()
+    window.addEventListener('resize', wake)
     return () => {
+      stopped = true
       if (raf !== 0) cancelAnimationFrame(raf)
       observer?.disconnect()
-      window.removeEventListener('resize', applyLayout)
+      window.removeEventListener('resize', wake)
     }
   }, [visible])
 
