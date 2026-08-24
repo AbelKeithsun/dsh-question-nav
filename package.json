@@ -1,7 +1,7 @@
 {
   "name": "@luziyang2026/dsh-question-nav",
   "description": "In-session question navigator for the DSH web GUI: a vertical minimap of round dots overlaid on the left edge of the conversation column, one dot per user question — hover enlarges and shows the full question text, click jumps to that message.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -79,7 +79,7 @@
     "README.md",
     "README.zh.md"
   ],
-  "license": "BSD-3-Clause",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/AbelKeithsun/dsh-question-nav.git"

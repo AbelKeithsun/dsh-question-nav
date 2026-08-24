@@ -74,7 +74,7 @@ externals 经加载器模块表解析。
 
 ## License
 
-BSD-3-Clause。
+MIT。
 
 [dsh]: https://github.com/deepseek-harness/deepseek-harness
 [npm]: https://www.npmjs.com/package/@luziyang2026/dsh-question-nav
