@@ -84,4 +84,27 @@ describe('mergeLiveQuestions', () => {
     const dots = groupQuestionsByTurn([entry(1, 'a', 7)])
     expect(mergeLiveQuestions(dots, [])).toEqual(dots)
   })
+
+  it('fast path returns the very same array when live is empty (bail-out ref)', () => {
+    const dots = groupQuestionsByTurn([entry(1, 'a', 7)])
+    expect(mergeLiveQuestions(dots, [])).toBe(dots)
+  })
+
+  it('fast path returns the very same array when every live question is known', () => {
+    const dots = groupQuestionsByTurn([entry(1, 'a', 7)])
+    expect(mergeLiveQuestions(dots, [live('13:input-messagea', 7)])).toBe(dots)
+  })
+
+  it('merges ties with the projected dot first (stable sort semantics)', () => {
+    const dots = groupQuestionsByTurn([entry(1, 'a', 7), entry(2, 'b', 30)])
+    const merged = mergeLiveQuestions(dots, [live('13:input-messagemid', 30)])
+    expect(merged.map(d => d.key)).toEqual(['13:input-messagea', '13:input-messageb', '13:input-messagemid'])
+  })
+
+  it('does not mutate the input dots when merging', () => {
+    const dots = groupQuestionsByTurn([entry(1, 'a', 7)])
+    const snapshot = JSON.stringify(dots)
+    mergeLiveQuestions(dots, [live('13:input-messagenew', 50)])
+    expect(JSON.stringify(dots)).toBe(snapshot)
+  })
 })

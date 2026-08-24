@@ -40,13 +40,24 @@ export interface TurnDot {
   readonly memberKeys: readonly string[]
 }
 
+/** True when entries are already in non-decreasing seq order (the projection
+ * appends in event order, so this is the common case and skips the sort). */
+function isSortedBySeq(entries: readonly QuestionEntry[]): boolean {
+  for (let i = 1; i < entries.length; i++) {
+    if (entries[i].seq < entries[i - 1].seq) return false
+  }
+  return true
+}
+
 /**
  * Fold the projection's question list into one dot per turn. Entries arrive
  * in event order; consecutive same-turn entries merge into a single dot whose
- * anchor is the turn's first question.
+ * anchor is the turn's first question. The input is expected to be sorted by
+ * seq; the defensive sort is skipped when it already is, so a long session
+ * never pays an O(n log n) sort on every content update.
  */
 export function groupQuestionsByTurn(entries: readonly QuestionEntry[]): TurnDot[] {
-  const sorted = [...entries].sort((a, b) => a.seq - b.seq)
+  const sorted = isSortedBySeq(entries) ? entries : [...entries].sort((a, b) => a.seq - b.seq)
   const dots: TurnDot[] = []
   for (const entry of sorted) {
     const key = questionKey(entry.id)
@@ -77,22 +88,49 @@ export function groupQuestionsByTurn(entries: readonly QuestionEntry[]): TurnDot
  * whose key is already folded into a dot is dropped (the projected copy
  * wins); the rest become single-question dots with `turn: null`, inserted in
  * anchor-seq order so the strip stays strictly chronological.
+ *
+ * Fast path: when nothing new arrives the SAME array is returned (no copy),
+ * so the caller can bail out of a re-render on identical reference.
  */
 export function mergeLiveQuestions(
   dots: readonly TurnDot[],
   live: readonly QuestionNode[],
 ): TurnDot[] {
-  const known = new Set(dots.flatMap(dot => dot.memberKeys))
-  const extras: TurnDot[] = live
-    .filter(question => !known.has(question.key))
-    .map(question => ({
+  if (live.length === 0) return dots as TurnDot[]
+  const known = new Set<string>()
+  for (const dot of dots) {
+    for (const key of dot.memberKeys) known.add(key)
+  }
+  const extras: TurnDot[] = []
+  for (const question of live) {
+    if (known.has(question.key)) continue
+    extras.push({
       turn: null,
       key: question.key,
       anchorSeq: question.anchorSeq,
       time: question.time,
       texts: [question.text],
       memberKeys: [question.key],
-    }))
-  if (extras.length === 0) return [...dots]
-  return [...dots, ...extras].sort((a, b) => a.anchorSeq - b.anchorSeq)
+    })
+  }
+  // Nothing new from the live window — reuse the input array unchanged.
+  if (extras.length === 0) return dots as TurnDot[]
+  // Both `dots` and `extras` are sorted by anchorSeq (dots from the projection
+  // order, extras from the live window order): merge linearly instead of
+  // re-sorting the whole list. Ties keep the projected dot first (stable
+  // sort semantics), matching the previous [...dots, ...extras].sort().
+  const out: TurnDot[] = []
+  let i = 0
+  for (const extra of extras) {
+    while (i < dots.length && dots[i].anchorSeq <= extra.anchorSeq) {
+      out.push(dots[i])
+      i += 1
+    }
+    out.push(extra)
+  }
+  while (i < dots.length) {
+    out.push(dots[i])
+    i += 1
+  }
+  return out
 }
