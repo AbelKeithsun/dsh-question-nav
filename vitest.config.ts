@@ -1,12 +1,12 @@
-import tsconfigPaths from 'vite-tsconfig-paths'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  plugins: [tsconfigPaths({
-    projects: [
-      './tsconfig.json',
-    ],
-  })],
+  // Resolve tsconfig paths natively (Vite's built-in resolver, replacing the
+  // deprecated vite-tsconfig-paths plugin); the nearest tsconfig.json from the
+  // project root is used.
+  resolve: {
+    tsconfigPaths: true,
+  },
   // npm SDK packages reference sourcemaps that are not published (files
   // exclude *.map); do not attempt to load them during transform.
   server: {
