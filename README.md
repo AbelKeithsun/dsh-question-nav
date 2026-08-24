@@ -10,7 +10,11 @@ It is an external plugin bundle with zero runtime dependencies — the browser
 half (`lib/client.js`) externalizes everything to the DSH shell, so it adds
 only a small bundle to the GUI at load time.
 
-Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm]).
+Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
+
+## Preview
+
+![Left-edge dot minimap with a hover tooltip showing the turn label and full question text](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/question-nav-preview.jpg)
 
 ## What it does
 
@@ -83,4 +87,5 @@ BSD-3-Clause.
 
 [dsh]: https://github.com/deepseek-harness/deepseek-harness
 [npm]: https://www.npmjs.com/package/@luziyang2026/dsh-question-nav
+[github]: https://github.com/AbelKeithsun/dsh-question-nav
 [bundle]: https://github.com/deepseek-harness/deepseek-harness

@@ -7,7 +7,11 @@
 它是外部插件 bundle，**零运行时依赖** —— 浏览器半区（`lib/client.js`）把一切
 外部化给 DSH 外壳，加载时只往 GUI 里加一个很小的 bundle。
 
-包名：**`@luziyang2026/dsh-question-nav`**（[npm][npm]）。
+包名：**`@luziyang2026/dsh-question-nav`**（[npm][npm] · [GitHub][github]）。
+
+## 效果展示
+
+![左缘圆点迷你地图：竖排圆点，每个圆点对应一个用户提问，悬停显示 Turn 编号与全文](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/question-nav-preview.jpg)
 
 ## 功能
 
@@ -74,4 +78,5 @@ BSD-3-Clause。
 
 [dsh]: https://github.com/deepseek-harness/deepseek-harness
 [npm]: https://www.npmjs.com/package/@luziyang2026/dsh-question-nav
+[github]: https://github.com/AbelKeithsun/dsh-question-nav
 [bundle]: https://github.com/deepseek-harness/deepseek-harness
