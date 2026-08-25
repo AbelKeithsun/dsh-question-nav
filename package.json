@@ -1,7 +1,7 @@
 {
   "name": "@luziyang2026/dsh-question-nav",
   "description": "In-session question navigator for the DSH web GUI: a vertical minimap of round dots overlaid on the edge of the conversation column (left or right, configurable in settings), one dot per user question — hovering focuses a magnified window and a vertical cascade of crisp question cards showing the full text and sent time of each (any card is clickable), click jumps to that message.",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
