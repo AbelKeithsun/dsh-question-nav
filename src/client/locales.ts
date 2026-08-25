@@ -4,6 +4,8 @@
  */
 export const zh = {
   'strip.empty': '本会话还没有提问',
+  'strip.up': '向上翻出 5 个提问圆点',
+  'strip.down': '向下翻出 5 个提问圆点',
   'jump.inactive': '聊天视图未激活',
   'jump.hidden': '目标无独立气泡，已定位到邻近内容',
   'jump.notfound': '目标未加载或不存在（可能已压缩）',
@@ -17,6 +19,8 @@ export const zh = {
 
 export const en = {
   'strip.empty': 'No questions in this session yet',
+  'strip.up': 'Reveal 5 question dots above',
+  'strip.down': 'Reveal 5 question dots below',
   'jump.inactive': 'Chat view is not active',
   'jump.hidden': 'No dedicated bubble; landed on nearby content',
   'jump.notfound': 'Target not loaded or missing (maybe compacted)',

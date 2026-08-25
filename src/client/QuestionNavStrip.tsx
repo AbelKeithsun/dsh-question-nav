@@ -15,6 +15,11 @@
  * jumps to its question, exactly like clicking the dot; the rail scrolls the
  * selected dot into view only when it is clipped by the band's edges.
  *
+ * Overflow is paged, not auto-scrolled: two small triangle buttons in the dot
+ * style sit above and below the dot queue (▲ / ▼), each click revealing five
+ * hidden dots. The native scrollbar stays hidden and the column fades at its
+ * edges as a pure visual cue — no hover auto-scroll.
+ *
  * Data source: the host-folded `questionIndex` session projection (whole
  * history, persisted host-side, pushed live through session/projection
  * frames) read through the injected `questionProjection` face, plus the live
@@ -37,7 +42,7 @@ import type { QuestionEntry } from '../core/question-entry.ts'
 import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
 import type { AlignPreference } from '../core/align.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
-import { EDGE_SCROLL_DWELL_MS, EDGE_SCROLL_ZONE, FOCUS_RADIUS, edgeScrollSpeed, focusCardMetrics, focusScale, focusTier, minimalScrollIntoView } from '../core/focus.ts'
+import { FOCUS_RADIUS, clampScrollTop, focusCardMetrics, focusScale, focusTier, minimalScrollIntoView, pageStep } from '../core/focus.ts'
 import { formatQuestionTime } from '../core/time.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -152,90 +157,30 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   // Last focused dot key, so re-hovering the same dot after a gap re-centers it.
   const lastFocusedKeyRef = useRef<string | null>(null)
   // Whether the dot band overflows its 60% clamp (drives the edge-fade mask
-  // and the hover auto-scroll).
+  // and the ▲/▼ paging buttons).
   const [scrollable, setScrollable] = useState(false)
-  // Edge auto-scroll state: the fade zones at the band's top/bottom edges are
-  // scroll affordances — hovering them scrolls the band so the faded dots
-  // flow into the clear area. Speed follows how deep the pointer is inside
-  // the zone; a rAF loop applies it smoothly while it is non-zero.
-  const edgeScrollRef = useRef<{ speed: number; raf: number; last: number }>({ speed: 0, raf: 0, last: 0 })
-  // Hover-intent dwell timer: auto-scroll only starts after the pointer rests
-  // in a fade zone for EDGE_SCROLL_DWELL_MS, so browsing dot-by-dot (or just
-  // passing through the zone) never triggers an unwanted scroll.
-  const edgeDwellRef = useRef<number | null>(null)
+  // Scroll offset of the band + its max offset: drives the ▲/▼ visibility
+  // (each direction hides once there is nothing more to reveal).
+  const [scrollPos, setScrollPos] = useState<{ top: number; max: number }>({ top: 0, max: 0 })
 
-  const cancelEdgeDwell = (): void => {
-    if (edgeDwellRef.current !== null) {
-      window.clearTimeout(edgeDwellRef.current)
-      edgeDwellRef.current = null
-    }
-  }
-
-  const stopEdgeScroll = (): void => {
-    cancelEdgeDwell()
-    edgeScrollRef.current.speed = 0
-    if (edgeScrollRef.current.raf !== 0) {
-      cancelAnimationFrame(edgeScrollRef.current.raf)
-      edgeScrollRef.current.raf = 0
-    }
-  }
-
-  const edgeTick = (now: number): void => {
-    const list = listRef.current
-    const state = edgeScrollRef.current
-    state.raf = 0
-    if (list === null || state.speed === 0) return
-    const dt = Math.min(64, now - state.last) / 1000
-    state.last = now
-    const before = list.scrollTop
-    list.scrollTop = before + state.speed * dt
-    // Stop at the scroll bounds — there is nothing more to reveal.
-    const atTop = list.scrollTop <= 0 && state.speed < 0
-    const atBottom = list.scrollTop >= list.scrollHeight - list.clientHeight - 1 && state.speed > 0
-    if (atTop || atBottom) {
-      state.speed = 0
-      return
-    }
-    state.raf = requestAnimationFrame(edgeTick)
-  }
-
-  const onListMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
+  const syncScroll = (): void => {
     const list = listRef.current
     if (list === null) return
-    // Hovering a dot is never a scroll intent: the user is reading that dot's
-    // card, so suppress auto-scroll while the pointer is over any dot.
-    const overDot = (e.target as HTMLElement).closest('[data-question-nav-index]') !== null
-    const rect = list.getBoundingClientRect()
-    const y = e.clientY - rect.top
-    const depthTop = EDGE_SCROLL_ZONE - y
-    const depthBottom = y - (rect.height - EDGE_SCROLL_ZONE)
-    let speed = 0
-    if (!overDot) {
-      if (depthTop > 0 && list.scrollTop > 0) {
-        speed = -edgeScrollSpeed(depthTop / EDGE_SCROLL_ZONE)
-      } else if (depthBottom > 0 && list.scrollTop < list.scrollHeight - list.clientHeight - 1) {
-        speed = edgeScrollSpeed(depthBottom / EDGE_SCROLL_ZONE)
-      }
-    }
-    const state = edgeScrollRef.current
-    state.speed = speed
-    if (speed === 0) {
-      // Left the zone (or moved onto a dot): cancel any pending dwell and stop.
-      stopEdgeScroll()
-      return
-    }
-    if (state.raf === 0 && edgeDwellRef.current === null) {
-      // Start only after the pointer has rested in the zone for the dwell
-      // time; re-check at fire time because the pointer may have left.
-      edgeDwellRef.current = window.setTimeout(() => {
-        edgeDwellRef.current = null
-        if (edgeScrollRef.current.speed !== 0 && edgeScrollRef.current.raf === 0) {
-          edgeScrollRef.current.last = performance.now()
-          edgeScrollRef.current.raf = requestAnimationFrame(edgeTick)
-        }
-      }, EDGE_SCROLL_DWELL_MS)
-    }
+    const max = Math.max(0, list.scrollHeight - list.clientHeight)
+    setScrollPos({ top: list.scrollTop, max })
   }
+
+  // Page the band by one DOT_PAGE_ROWS click in the given direction.
+  const pageBy = (dir: 1 | -1): void => {
+    const list = listRef.current
+    if (list === null) return
+    const max = Math.max(0, list.scrollHeight - list.clientHeight)
+    list.scrollTop = clampScrollTop(list.scrollTop + dir * pageStep(), max)
+    syncScroll()
+  }
+
+  const canPageUp = scrollable && scrollPos.top > 0
+  const canPageDown = scrollable && scrollPos.top < scrollPos.max
 
   // Focus persists briefly after leaving the rail, so the mouse can reach the
   // clickable cascade cards; entering a card cancels the clear, leaving
@@ -416,15 +361,12 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   // scroll only when the dot (plus room for its two magnified neighbors) is
   // clipped by the band edges, and then only by the minimal amount — never
   // re-center an already-visible dot, so browsing dot-by-dot doesn't shift
-  // the band under the pointer. Suppressed while the edge auto-scroll is
-  // driving: hovering dots that flow under a parked pointer would otherwise
-  // fight the scroll.
+  // the band under the pointer.
   useLayoutEffect(() => {
     const key = focus?.key ?? null
     if (lastFocusedKeyRef.current === key) return
     lastFocusedKeyRef.current = key
     if (key === null) return
-    if (edgeScrollRef.current.raf !== 0) return
     const list = listRef.current
     if (list === null) return
     const target = list.querySelector<HTMLElement>('[data-question-nav-focused="true"]')
@@ -437,15 +379,19 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       target.offsetHeight,
     )
     if (next !== null) list.scrollTop = next
+    syncScroll()
   }, [focus])
 
-  // Detect band overflow: drives the edge-fade mask + hover auto-scroll.
+  // Detect band overflow: drives the edge-fade mask + the ▲/▼ paging buttons.
   // Re-checked when the dots change and whenever the band itself resizes
   // (the layout loop above clamps it to the conversation height).
   useLayoutEffect(() => {
     const list = listRef.current
     if (list === null) return
-    const check = (): void => setScrollable(list.scrollHeight > list.clientHeight + 1)
+    const check = (): void => {
+      setScrollable(list.scrollHeight > list.clientHeight + 1)
+      syncScroll()
+    }
     check()
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(check)
@@ -453,11 +399,10 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     return () => observer.disconnect()
   }, [dots, align])
 
-  // Clear any pending timers and the edge auto-scroll on unmount.
+  // Clear any pending timers on unmount.
   useEffect(() => () => {
     if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current)
     if (clearFocusTimerRef.current !== null) window.clearTimeout(clearFocusTimerRef.current)
-    stopEdgeScroll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -499,43 +444,66 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       className={align === 'right' ? `${styles.rail} ${styles.railRight}` : styles.rail}
       data-question-nav="rail"
     >
-      <div
-        ref={listRef}
-        className={scrollable ? `${styles.list} ${styles.listScrollable}` : styles.list}
-        onMouseMove={scrollable ? onListMouseMove : undefined}
-        onMouseLeave={() => {
-          stopEdgeScroll()
-          scheduleClearFocus()
-        }}
-      >
+      <div className={styles.queue}>
         {dots.length === 0 ? (
           <div className={styles.empty}>{t('strip.empty')}</div>
         ) : (
-          <div className={styles.dots}>
+          <>
             <span className={styles.count}>{dots.length}</span>
-            {dots.map((dot, index) => {
-              const isFocused = focus !== null && focus.key === dot.key
-              // Progressive magnification: selected largest, ±1 smaller, ±2
-              // smaller still, the rest base scale.
-              const tier = selectedIndex < 0 ? null : focusTier(index - selectedIndex)
-              const scale = jumpingKey === dot.key ? 1.6 : tier !== null ? focusScale(tier) : 1
-              const cls = [styles.dot]
-              if (isFocused) cls.push(styles.focused)
-              if (jumpingKey === dot.key) cls.push(styles.active)
-              return (
-                <button
-                  key={dot.key}
-                  className={cls.join(' ')}
-                  style={{ transform: `scale(${scale})` }}
-                  data-question-nav-focused={isFocused ? 'true' : undefined}
-                  data-question-nav-index={index}
-                  aria-label={dot.texts[0] ?? ''}
-                  onMouseEnter={(e) => openFocus(dot, e.currentTarget)}
-                  onClick={() => onJump(dot)}
-                />
-              )
-            })}
-          </div>
+            {scrollable ? (
+              <button
+                type="button"
+                className={`${styles.navBtn} ${styles.navUp}`}
+                aria-label={t('strip.up')}
+                style={{ visibility: canPageUp ? 'visible' : 'hidden' }}
+                onMouseEnter={cancelClearFocus}
+                onMouseLeave={scheduleClearFocus}
+                onClick={() => pageBy(-1)}
+              />
+            ) : null}
+            <div
+              ref={listRef}
+              className={scrollable ? `${styles.list} ${styles.listScrollable}` : styles.list}
+              onScroll={syncScroll}
+              onMouseLeave={scheduleClearFocus}
+            >
+              <div className={styles.dots}>
+                {dots.map((dot, index) => {
+                  const isFocused = focus !== null && focus.key === dot.key
+                  // Progressive magnification: selected largest, ±1 smaller, ±2
+                  // smaller still, the rest base scale.
+                  const tier = selectedIndex < 0 ? null : focusTier(index - selectedIndex)
+                  const scale = jumpingKey === dot.key ? 1.6 : tier !== null ? focusScale(tier) : 1
+                  const cls = [styles.dot]
+                  if (isFocused) cls.push(styles.focused)
+                  if (jumpingKey === dot.key) cls.push(styles.active)
+                  return (
+                    <button
+                      key={dot.key}
+                      className={cls.join(' ')}
+                      style={{ transform: `scale(${scale})` }}
+                      data-question-nav-focused={isFocused ? 'true' : undefined}
+                      data-question-nav-index={index}
+                      aria-label={dot.texts[0] ?? ''}
+                      onMouseEnter={(e) => openFocus(dot, e.currentTarget)}
+                      onClick={() => onJump(dot)}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+            {scrollable ? (
+              <button
+                type="button"
+                className={`${styles.navBtn} ${styles.navDown}`}
+                aria-label={t('strip.down')}
+                style={{ visibility: canPageDown ? 'visible' : 'hidden' }}
+                onMouseEnter={cancelClearFocus}
+                onMouseLeave={scheduleClearFocus}
+                onClick={() => pageBy(1)}
+              />
+            ) : null}
+          </>
         )}
       </div>
       {hint !== null

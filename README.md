@@ -56,10 +56,11 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
 - **Click**: jumps to that question. Only then does the jump loop page the
   window (`loadOlder()`) to bring that specific page into view — never the
   whole history up front.
-- **Elegant overflow scroll**: when many dots don't fit the 60% band, the
-  native scrollbar is hidden and the column fades out at its top and bottom
-  edges; hovering either fade zone gently auto-scrolls so hidden dots flow
-  into the clear, clickable area (wheel and trackpad still scroll too).
+- **Paged overflow**: when many dots don't fit the 60% band, the native
+  scrollbar is hidden and two small triangle buttons in the dot style appear —
+  **▲ above the dot queue and ▼ below it** — each click revealing five hidden
+  dots. The column fades at its top and bottom edges as a pure visual cue
+  (wheel and trackpad still scroll too); hovering never auto-scrolls.
 - Empty/left areas of the rail pass pointer events through to the conversation
   (it never blocks the chat).
 

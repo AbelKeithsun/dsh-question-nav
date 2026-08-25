@@ -5,10 +5,11 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  EDGE_SCROLL_MAX_SPEED, EDGE_SCROLL_MIN_SPEED,
+  DOT_PAGE_ROWS, DOT_SIZE,
   FOCUS_RADIUS, FOCUS_SCALES,
-  edgeScrollSpeed, focusCardMetrics, focusScale, focusTier, magnificationWindow,
-  minimalScrollIntoView,
+  canScrollAbove, canScrollBelow, clampScrollTop,
+  focusCardMetrics, focusScale, focusTier, magnificationWindow,
+  minimalScrollIntoView, pageStep,
 } from '../src/core/focus.ts'
 
 describe('focusTier', () => {
@@ -83,18 +84,29 @@ describe('focusCardMetrics', () => {
   })
 })
 
-describe('edgeScrollSpeed', () => {
-  it('eases from MIN at the zone boundary to MAX at the very edge', () => {
-    expect(edgeScrollSpeed(0)).toBe(EDGE_SCROLL_MIN_SPEED)
-    expect(edgeScrollSpeed(1)).toBe(EDGE_SCROLL_MAX_SPEED)
-    expect(edgeScrollSpeed(0.5)).toBeCloseTo((EDGE_SCROLL_MIN_SPEED + EDGE_SCROLL_MAX_SPEED) / 2)
+describe('paging (triangle buttons)', () => {
+  it('pages by DOT_PAGE_ROWS whole dot rows', () => {
+    expect(DOT_PAGE_ROWS).toBe(5)
+    // 5 rows × (8px dot + 6px gap) = 70px.
+    expect(pageStep()).toBe(5 * (DOT_SIZE + 6))
+    expect(pageStep(10, 4, 5)).toBe(5 * 14)
   })
-  it('clamps out-of-range ratios', () => {
-    expect(edgeScrollSpeed(-0.5)).toBe(EDGE_SCROLL_MIN_SPEED)
-    expect(edgeScrollSpeed(2)).toBe(EDGE_SCROLL_MAX_SPEED)
+  it('honours explicit geometry and row counts', () => {
+    expect(pageStep(8, 6, 3)).toBe(42)
+    expect(pageStep(8, 6, 1)).toBe(14)
   })
-  it('increases monotonically with depth', () => {
-    expect(edgeScrollSpeed(0.8)).toBeGreaterThan(edgeScrollSpeed(0.2))
+  it('clamps a target scrollTop into the valid range', () => {
+    expect(clampScrollTop(-5, 100)).toBe(0)
+    expect(clampScrollTop(50, 100)).toBe(50)
+    expect(clampScrollTop(150, 100)).toBe(100)
+    expect(clampScrollTop(20, 0)).toBe(0)
+  })
+  it('reports whether hidden dots remain above/below', () => {
+    expect(canScrollAbove(0)).toBe(false)
+    expect(canScrollAbove(1)).toBe(true)
+    expect(canScrollBelow(0, 100)).toBe(true)
+    expect(canScrollBelow(100, 100)).toBe(false)
+    expect(canScrollBelow(0, 0)).toBe(false)
   })
 })
 

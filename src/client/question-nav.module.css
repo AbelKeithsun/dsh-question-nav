@@ -21,18 +21,33 @@
   left: auto;
 }
 
-/* Vertically center the dot column when it is short; when it is tall it is
-   clamped to at most 60% of the conversation height (auto margins center the
-   band) and scrolls from the top (auto margins collapse to 0 on overflow).
-   The band itself is interactive so wheel-scrolling works over the gaps too
-   (the rail above is pointer-events:none). The native scrollbar is always
-   hidden: this is a minimap scrolled by wheel/trackpad and by hovering the
-   fade zones, and overflow is signalled by the edge fade below. */
-.list {
+/* The paging queue: the fixed column (count + ▲, then the scrollable dot band,
+   then ▼) that replaces the edge-fade auto-scroll. Clamped to 60% of the
+   conversation height and vertically centered (auto margins); when the queue
+   overflows, only the middle dot band scrolls — the count and triangles stay
+   pinned. The wrapper stays pass-through; the band and triangles re-enable
+   pointer events. */
+.queue {
   flex: 0 1 auto;
   min-height: 0;
   max-height: 60%;
   margin: auto 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* The middle dot band: the only scrollable part of the queue. Scrolls from the
+   top (overflow collapses the auto margins to 0). The native scrollbar is
+   always hidden: this is a minimap paged by the ▲/▼ buttons and by
+   wheel/trackpad, and overflow is signalled by the edge fade below. */
+.list {
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -50,17 +65,11 @@
   display: none;
 }
 /* Overflowing band (applied from JS when scrollHeight > clientHeight): dots
-   fade out towards both edges, signalling "more beyond" without a scrollbar.
-   The fade zones double as hover auto-scroll areas (see QuestionNavStrip). */
+   fade out towards both edges — a pure visual cue for "more beyond" (the
+   paging triangles do the actual scrolling). */
 .listScrollable {
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 22px, black calc(100% - 22px), transparent);
   mask-image: linear-gradient(to bottom, transparent, black 22px, black calc(100% - 22px), transparent);
-}
-.list > *:first-child {
-  margin-top: auto;
-}
-.list > *:last-child {
-  margin-bottom: auto;
 }
 
 .dot {
@@ -97,13 +106,53 @@
   user-select: none;
 }
 
-/* The centered group: count + dot column, centered together (the list's auto
+/* The centered group: dot column, centered together (the list's auto
    margins center it when short; it scrolls as a unit when tall). */
 .dots {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
+}
+
+/* Paging triangles (▲ above the dot queue, ▼ below), styled like the dots:
+   a plain triangle in the dot's quiet border color that lights up brand on
+   hover. Clicking pages the band by DOT_PAGE_ROWS dots. The triangle is a
+   pure CSS border triangle so it stays crisp at any DPI; the button box is a
+   slightly larger transparent hit target. */
+.navBtn {
+  flex: none;
+  pointer-events: auto;
+  width: 14px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.navBtn::before {
+  content: '';
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  transition: border-color 120ms ease;
+}
+.navUp::before {
+  border-bottom: 7px solid var(--dsw-alias-border-l3);
+}
+.navDown::before {
+  border-top: 7px solid var(--dsw-alias-border-l3);
+}
+.navUp:hover::before {
+  border-bottom-color: var(--dsw-alias-brand-primary);
+}
+.navDown:hover::before {
+  border-top-color: var(--dsw-alias-brand-primary);
 }
 
 .empty {

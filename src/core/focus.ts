@@ -75,10 +75,6 @@ export function magnificationWindow(total: number, selected: number, radius: num
   return out
 }
 
-/** Height (px) of the dot band's top/bottom fade zones, which double as hover
- *  auto-scroll areas (slightly larger than the 22px CSS mask fade). */
-export const EDGE_SCROLL_ZONE = 26
-
 /** Clearance (px) kept around the focused dot when scrolling it into view, so
  *  its two magnified neighbors on each side stay inside the band's clear area
  *  (2 dot rows ≈ 28px + the 22px fade zone). */
@@ -110,23 +106,37 @@ export function minimalScrollIntoView(
   return Math.max(0, Math.min(next, Math.max(0, scrollHeight - clientHeight)))
 }
 
-/** Hover-intent dwell (ms): the pointer must rest inside a fade zone this
- *  long before auto-scroll starts, so sweeping up/down the dots one by one
- *  (or just passing through the zone) never triggers an unwanted scroll. */
-export const EDGE_SCROLL_DWELL_MS = 200
-
-/** Edge auto-scroll speed range (px/s): MIN at the zone boundary, MAX at the
- *  very edge of the band. */
-export const EDGE_SCROLL_MIN_SPEED = 90
-export const EDGE_SCROLL_MAX_SPEED = 420
-
 /**
- * Auto-scroll speed (px/s) for a pointer at `ratio` depth into an edge fade
- * zone (0 = at the zone boundary, 1 = at the band's very edge): eases
- * linearly from MIN to MAX so a shallow probe scrolls gently and pushing
- * into the edge moves fast. The sign (direction) is applied by the caller.
+ * Paging model for the dot band. Overflowing dots are not auto-scrolled by
+ * hovering the edges: instead the user pages them with two triangle buttons
+ * (▲ above the dot queue, ▼ below it), each click revealing `DOT_PAGE_ROWS`
+ * hidden dots. Pure arithmetic — no React, no DOM.
  */
-export function edgeScrollSpeed(ratio: number): number {
-  const r = Math.max(0, Math.min(1, ratio))
-  return EDGE_SCROLL_MIN_SPEED + (EDGE_SCROLL_MAX_SPEED - EDGE_SCROLL_MIN_SPEED) * r
+
+/** How many hidden dots one click of a paging triangle reveals. */
+export const DOT_PAGE_ROWS = 5
+
+/** Base dot diameter (px) and gap (px), matching the rail CSS — the paging
+ *  step is expressed in whole dot rows, so it tracks the visible geometry. */
+export const DOT_SIZE = 8
+export const DOT_GAP = 6
+
+/** Scroll step (px) for one paging click: `rows` whole dot rows. */
+export function pageStep(dotSize: number = DOT_SIZE, gap: number = DOT_GAP, rows: number = DOT_PAGE_ROWS): number {
+  return rows * (dotSize + gap)
+}
+
+/** Clamp a target scrollTop into the band's valid range (0..maxScroll). */
+export function clampScrollTop(target: number, maxScroll: number): number {
+  return Math.max(0, Math.min(target, Math.max(0, maxScroll)))
+}
+
+/** Whether hidden dots remain above the band (show ▲). */
+export function canScrollAbove(scrollTop: number): boolean {
+  return scrollTop > 0
+}
+
+/** Whether hidden dots remain below the band (show ▼). */
+export function canScrollBelow(scrollTop: number, maxScroll: number): boolean {
+  return scrollTop < maxScroll
 }
