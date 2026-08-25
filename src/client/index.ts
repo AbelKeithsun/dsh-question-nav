@@ -133,8 +133,10 @@ function createInject(ctx: ClientContext, settings: QuestionNavSettingsControlle
       void jumpToQuestion(ports, key)
     },
     align: () => settings.getSnapshot().align,
-    subscribeAlign: (cb) => settings.subscribe(cb),
+    subscribeSettings: (cb) => settings.subscribe(cb),
     setAlign: (align) => settings.setAlign(align),
+    pageSize: () => settings.getSnapshot().pageSize,
+    setPageSize: (pageSize) => settings.setPageSize(pageSize),
   }
 }
 

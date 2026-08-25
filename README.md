@@ -58,10 +58,13 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
   whole history up front.
 - **Paged overflow**: when many dots don't fit the 60% band, the native
   scrollbar is hidden and two small triangle buttons in the dot style appear —
-  **▲ above the dot queue and ▼ below it** — each click revealing five hidden
-  dots. The column fades at its top and bottom edges as a pure visual cue
-  (wheel and trackpad still scroll too); **hovering never scrolls the band**,
-  so the dots stay put while you browse.
+  **▲ above the dot queue and ▼ below it** — each click revealing the next
+  page of hidden dots, which pop in with a short staggered animation as click
+  feedback. The page size is configurable — **Settings → Plugins → Question
+  Nav → Dots per page** (3 / 5 / 8 / 10, default 5). The triangles themselves
+  are the overflow cue — each appears only while its direction has more dots
+  to reveal (wheel and trackpad still scroll too); **hovering never scrolls
+  the band**, so the dots stay put while you browse.
 - Empty/left areas of the rail pass pointer events through to the conversation
   (it never blocks the chat).
 

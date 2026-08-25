@@ -16,9 +16,12 @@
  * the band — the dot column stays put while you browse.
  *
  * Overflow is paged, not auto-scrolled: two small triangle buttons in the dot
- * style sit above and below the dot queue (▲ / ▼), each click revealing five
- * hidden dots. The native scrollbar stays hidden and the column fades at its
- * edges as a pure visual cue — no hover auto-scroll of any kind.
+ * style sit above and below the dot queue (▲ / ▼), each click revealing one
+ * page of hidden dots (the page size is configurable in the plugin settings,
+ * default 5) with a staggered pop-in animation as click feedback. The native
+ * scrollbar stays hidden; the triangles themselves are the overflow cue (each
+ * appears only while its direction has more to reveal) — no hover auto-scroll
+ * of any kind.
  *
  * Data source: the host-folded `questionIndex` session projection (whole
  * history, persisted host-side, pushed live through session/projection
@@ -41,8 +44,9 @@ import type { QuestionNode } from '../core/nodes.ts'
 import type { QuestionEntry } from '../core/question-entry.ts'
 import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
 import type { AlignPreference } from '../core/align.ts'
+import type { PageSize } from '../core/page-size.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
-import { FOCUS_RADIUS, clampScrollTop, focusCardMetrics, focusScale, focusTier, pageStep } from '../core/focus.ts'
+import { DOT_GAP, DOT_SIZE, FOCUS_RADIUS, clampScrollTop, focusCardMetrics, focusScale, focusTier, pageStep } from '../core/focus.ts'
 import { formatQuestionTime } from '../core/time.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -69,10 +73,14 @@ export interface QuestionNavInjected {
   jump: (sessionId: SessionId, key: string) => void
   /** Current rail anchor edge (defaults to 'left' before the settings section is ready). */
   align: () => AlignPreference
-  /** Observe anchor-edge changes; returns an unsubscribe. */
-  subscribeAlign: (cb: () => void) => () => void
+  /** Observe plugin-settings changes (align, page size); returns an unsubscribe. */
+  subscribeSettings: (cb: () => void) => () => void
   /** Persist a new anchor edge. */
   setAlign: (align: AlignPreference) => void
+  /** Current ▲/▼ page size (defaults to DEFAULT_PAGE_SIZE before the settings section is ready). */
+  pageSize: () => PageSize
+  /** Persist a new page size. */
+  setPageSize: (pageSize: PageSize) => void
 }
 
 type ComponentProps = PropsRuntime<'shell.overlay'> & QuestionNavInjected & PropsLocale<'question-nav'>
@@ -146,6 +154,8 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const [hint, setHint] = useState<string | null>(null)
   const [focus, setFocus] = useState<FocusState | null>(null)
   const [align, setAlign] = useState<AlignPreference>(() => props.align())
+  // Dots revealed per ▲/▼ click (settings scope; drives pageBy's step).
+  const [pageSize, setPageSize] = useState<PageSize>(() => props.pageSize())
   const panelRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const hintTimerRef = useRef<number | null>(null)
@@ -154,12 +164,17 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const clearFocusTimerRef = useRef<number | null>(null)
   // Last rendered dot list, for the change-detection bail-out below.
   const lastDotsRef = useRef<TurnDot[]>([])
-  // Whether the dot band overflows its 60% clamp (drives the edge-fade mask
-  // and the ▲/▼ paging buttons).
+  // Whether the dot band overflows its 60% clamp (drives the ▲/▼ paging
+  // buttons).
   const [scrollable, setScrollable] = useState(false)
   // Scroll offset of the band + its max offset: drives the ▲/▼ visibility
   // (each direction hides once there is nothing more to reveal).
   const [scrollPos, setScrollPos] = useState<{ top: number; max: number }>({ top: 0, max: 0 })
+  // Dots revealed by the latest ▲/▼ click: key → stagger order + travel
+  // direction. Drives a short staggered pop-in animation so the click has a
+  // visible effect; cleared by a timer once the animation has played out.
+  const [revealed, setRevealed] = useState<ReadonlyMap<string, { dir: 1 | -1; order: number }> | null>(null)
+  const revealTimerRef = useRef<number | null>(null)
 
   const syncScroll = (): void => {
     const list = listRef.current
@@ -168,13 +183,45 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     setScrollPos({ top: list.scrollTop, max })
   }
 
-  // Page the band by one DOT_PAGE_ROWS click in the given direction.
+  // Page the band by one DOT_PAGE_ROWS click in the given direction, then mark
+  // the dots the page just brought into view so they play a staggered pop-in
+  // animation in the direction of travel (▼ → rise from below, ▲ → drop from
+  // above) — the visual confirmation that the click revealed new dots.
   const pageBy = (dir: 1 | -1): void => {
     const list = listRef.current
     if (list === null) return
     const max = Math.max(0, list.scrollHeight - list.clientHeight)
-    list.scrollTop = clampScrollTop(list.scrollTop + dir * pageStep(), max)
+    const target = clampScrollTop(list.scrollTop + dir * pageStep(DOT_SIZE, DOT_GAP, pageSize), max)
+    if (target === list.scrollTop) return
+    // Snapshot which dots are geometrically inside the band before the jump
+    // (the container rect does not move when its content scrolls).
+    const band = list.getBoundingClientRect()
+    const els = Array.from(list.querySelectorAll<HTMLElement>('[data-question-nav-key]'))
+    const wasVisible = els.map((el) => {
+      const r = el.getBoundingClientRect()
+      return r.bottom > band.top && r.top < band.bottom
+    })
+    list.scrollTop = target
     syncScroll()
+    const next = new Map<string, { dir: 1 | -1; order: number }>()
+    const fresh: string[] = []
+    els.forEach((el, i) => {
+      if (wasVisible[i]) return
+      const r = el.getBoundingClientRect()
+      const key = el.dataset.questionNavKey
+      if (key !== undefined && r.bottom > band.top && r.top < band.bottom) {
+        fresh.push(key)
+      }
+    })
+    // Stagger radiates from the clicked triangle: paging down (▼) starts at
+    // the bottom of the fresh batch, paging up (▲) at the top.
+    if (dir === 1) fresh.reverse()
+    fresh.forEach((key, order) => next.set(key, { dir, order }))
+    if (next.size === 0) return
+    setRevealed(next)
+    if (revealTimerRef.current !== null) window.clearTimeout(revealTimerRef.current)
+    // Animation (320ms) + per-dot stagger (35ms each) + slack.
+    revealTimerRef.current = window.setTimeout(() => setRevealed(null), 320 + next.size * 35 + 120)
   }
 
   const canPageUp = scrollable && scrollPos.top > 0
@@ -194,9 +241,13 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     clearFocusTimerRef.current = window.setTimeout(() => setFocus(null), 240)
   }
 
-  // Follow the rail anchor edge from the settings scope (a change re-anchors
-  // the rail through the layout effect below).
-  useEffect(() => props.subscribeAlign(() => setAlign(props.align())), [props])
+  // Follow the plugin settings from the settings scope (an align change
+  // re-anchors the rail through the layout effect below; a page-size change
+  // steps the ▲/▼ paging).
+  useEffect(() => props.subscribeSettings(() => {
+    setAlign(props.align())
+    setPageSize(props.pageSize())
+  }), [props])
 
   const showHint = (message: string): void => {
     setHint(message)
@@ -355,9 +406,9 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     }
   }, [visible, align])
 
-  // Detect band overflow: drives the edge-fade mask + the ▲/▼ paging buttons.
-  // Re-checked when the dots change and whenever the band itself resizes
-  // (the layout loop above clamps it to the conversation height).
+  // Detect band overflow: drives the ▲/▼ paging buttons. Re-checked when the
+  // dots change and whenever the band itself resizes (the layout loop above
+  // clamps it to the conversation height).
   useLayoutEffect(() => {
     const list = listRef.current
     if (list === null) return
@@ -376,6 +427,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   useEffect(() => () => {
     if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current)
     if (clearFocusTimerRef.current !== null) window.clearTimeout(clearFocusTimerRef.current)
+    if (revealTimerRef.current !== null) window.clearTimeout(revealTimerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -436,7 +488,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
             ) : null}
             <div
               ref={listRef}
-              className={scrollable ? `${styles.list} ${styles.listScrollable}` : styles.list}
+              className={styles.list}
               onScroll={syncScroll}
               onMouseLeave={scheduleClearFocus}
             >
@@ -447,16 +499,26 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
                   // smaller still, the rest base scale.
                   const tier = selectedIndex < 0 ? null : focusTier(index - selectedIndex)
                   const scale = jumpingKey === dot.key ? 1.6 : tier !== null ? focusScale(tier) : 1
+                  // Click-paging feedback: dots just paged into view play a
+                  // staggered pop-in, traveling in the paging direction.
+                  const reveal = revealed?.get(dot.key)
                   const cls = [styles.dot]
                   if (isFocused) cls.push(styles.focused)
                   if (jumpingKey === dot.key) cls.push(styles.active)
+                  if (reveal !== undefined) {
+                    cls.push(reveal.dir === 1 ? styles.dotEnterFromBottom : styles.dotEnterFromTop)
+                  }
                   return (
                     <button
                       key={dot.key}
                       className={cls.join(' ')}
-                      style={{ transform: `scale(${scale})` }}
+                      style={{
+                        transform: `scale(${scale})`,
+                        ...(reveal !== undefined ? { animationDelay: `${reveal.order * 35}ms` } : {}),
+                      }}
                       data-question-nav-focused={isFocused ? 'true' : undefined}
                       data-question-nav-index={index}
+                      data-question-nav-key={dot.key}
                       aria-label={dot.texts[0] ?? ''}
                       onMouseEnter={(e) => openFocus(dot, e.currentTarget)}
                       onClick={() => onJump(dot)}

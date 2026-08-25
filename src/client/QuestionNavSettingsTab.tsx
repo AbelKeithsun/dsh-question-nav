@@ -1,9 +1,10 @@
 /**
  * The plugin's settings page inside the shell's Plugins section
- * (`settings.plugins.tab`): a segmented control choosing which edge of the
- * conversation column the dot rail anchors to. The choice is written to the
+ * (`settings.plugins.tab`): two segmented controls — which edge of the
+ * conversation column the dot rail anchors to, and how many hidden dots one
+ * ▲/▼ paging-button click reveals. The choices are written to the
  * `question-nav` settings namespace (registered by the host half); the strip
- * re-anchors live when the snapshot changes.
+ * re-anchors and re-steps live when the snapshot changes.
  *
  * @module dsh-question-nav/client/settings-tab
  */
@@ -13,6 +14,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 // Type-only: pulls the settings shell's SlotMap merge ('settings.plugins.tab').
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { ALIGN_OPTIONS } from '../core/align.ts'
+import { PAGE_SIZE_OPTIONS } from '../core/page-size.ts'
 import type { QuestionNavInjected } from './QuestionNavStrip.tsx'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -20,14 +22,15 @@ import styles from './question-nav.module.css'
 type ComponentProps = PropsRuntime<'settings.plugins.tab'> & QuestionNavInjected & PropsLocale<'question-nav'>
 
 /** Re-render on settings snapshot changes (the register inject face is static). */
-function useAlignTick(subscribe: QuestionNavInjected['subscribeAlign']): void {
+function useSettingsTick(subscribe: QuestionNavInjected['subscribeSettings']): void {
   const [, bump] = useState(0)
   useEffect(() => subscribe(() => bump((n) => n + 1)), [subscribe])
 }
 
 export function QuestionNavSettingsTab(props: ComponentProps): React.JSX.Element | null {
-  useAlignTick(props.subscribeAlign)
+  useSettingsTick(props.subscribeSettings)
   const align = props.align()
+  const pageSize = props.pageSize()
   const t = props.t
 
   return (
@@ -45,6 +48,22 @@ export function QuestionNavSettingsTab(props: ComponentProps): React.JSX.Element
             onClick={() => props.setAlign(option)}
           >
             {t(option === 'left' ? 'settings.align.left' : 'settings.align.right')}
+          </button>
+        ))}
+      </div>
+      <p className={styles.settingsTitle}>{t('settings.pagesize.title')}</p>
+      <p className={styles.settingsDesc}>{t('settings.pagesize.desc')}</p>
+      <div className={styles.segmented} role="radiogroup" aria-label={t('settings.pagesize.title')}>
+        {PAGE_SIZE_OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={pageSize === option}
+            className={pageSize === option ? `${styles.segment} ${styles.segmentActive}` : styles.segment}
+            onClick={() => props.setPageSize(option)}
+          >
+            {option}
           </button>
         ))}
       </div>

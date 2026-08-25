@@ -96,6 +96,50 @@
   background: var(--dsw-alias-brand-primary);
 }
 
+/* Click-paging feedback: dots revealed by a ▲/▼ click pop in with a staggered
+   fade + rise/drop (per-dot animation-delay is set inline, stagger order *
+   35ms), traveling in the paging direction so the newly revealed batch reads
+   as "the click brought these in". `both` fill holds the hidden `from` state
+   during each dot's delay. */
+@keyframes dotEnterFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.4);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes dotEnterFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-7px) scale(0.4);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.dotEnterFromBottom {
+  animation: dotEnterFromBottom 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.dotEnterFromTop {
+  animation: dotEnterFromTop 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dotEnterFromBottom,
+  .dotEnterFromTop {
+    animation: none;
+  }
+}
+
 /* Question count, rendered just above the first dot (sits in the list gap). */
 .count {
   flex: none;
@@ -290,6 +334,10 @@
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
   margin: 0;
+}
+/* Separate consecutive setting groups (align, then page size). */
+.segmented + .settingsTitle {
+  margin-top: 12px;
 }
 .settingsDesc {
   font-size: 12px;
