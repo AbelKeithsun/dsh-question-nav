@@ -24,8 +24,10 @@
 /* Vertically center the dot column when it is short; scroll from the top when
    it is tall (auto margins collapse to 0 on overflow, so nothing clips). */
 .list {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 60%;
+  margin: auto 0;
   width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -35,6 +37,7 @@
   gap: 6px;
   padding: 8px 0;
   scrollbar-width: thin;
+  pointer-events: auto;
 }
 .list > *:first-child {
   margin-top: auto;
