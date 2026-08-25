@@ -8,11 +8,12 @@
  * within that band when the session has more dots than fit.
  *
  * Hovering a dot "selects" it: the selected dot plus its two immediate
- * neighbors on each side magnify (progressively smaller with distance), the
- * selected dot reveals a frosted question card (turn label, full question
- * text, sent time) with a decorative stack of blurred cards fanning out
- * below it, and the rail auto-centers the selected dot. Clicking jumps the
- * chat to that turn's first question.
+ * neighbors on each side magnify (progressively smaller with distance), and a
+ * vertical cascade of question cards opens — the selected (center) card is the
+ * focus (brand accent, elevated, full question text), the four neighbors are
+ * narrower context cards clamped to fewer lines. Every card is clickable and
+ * jumps to its question, exactly like clicking the dot; the rail auto-centers
+ * the selected dot.
  *
  * Data source: the host-folded `questionIndex` session projection (whole
  * history, persisted host-side, pushed live through session/projection
@@ -36,7 +37,7 @@ import type { QuestionEntry } from '../core/question-entry.ts'
 import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
 import type { AlignPreference } from '../core/align.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
-import { FOCUS_RADIUS, focusCardMetrics, focusScale, focusTier } from '../core/focus.ts'
+import { EDGE_SCROLL_ZONE, FOCUS_RADIUS, edgeScrollSpeed, focusCardMetrics, focusScale, focusTier } from '../core/focus.ts'
 import { formatQuestionTime } from '../core/time.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -150,6 +151,62 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const lastDotsRef = useRef<TurnDot[]>([])
   // Last focused dot key, so re-hovering the same dot after a gap re-centers it.
   const lastFocusedKeyRef = useRef<string | null>(null)
+  // Whether the dot band overflows its 60% clamp (drives the edge-fade mask
+  // and the hover auto-scroll).
+  const [scrollable, setScrollable] = useState(false)
+  // Edge auto-scroll state: the fade zones at the band's top/bottom edges are
+  // scroll affordances — hovering them scrolls the band so the faded dots
+  // flow into the clear area. Speed follows how deep the pointer is inside
+  // the zone; a rAF loop applies it smoothly while it is non-zero.
+  const edgeScrollRef = useRef<{ speed: number; raf: number; last: number }>({ speed: 0, raf: 0, last: 0 })
+
+  const stopEdgeScroll = (): void => {
+    edgeScrollRef.current.speed = 0
+    if (edgeScrollRef.current.raf !== 0) {
+      cancelAnimationFrame(edgeScrollRef.current.raf)
+      edgeScrollRef.current.raf = 0
+    }
+  }
+
+  const edgeTick = (now: number): void => {
+    const list = listRef.current
+    const state = edgeScrollRef.current
+    state.raf = 0
+    if (list === null || state.speed === 0) return
+    const dt = Math.min(64, now - state.last) / 1000
+    state.last = now
+    const before = list.scrollTop
+    list.scrollTop = before + state.speed * dt
+    // Stop at the scroll bounds — there is nothing more to reveal.
+    const atTop = list.scrollTop <= 0 && state.speed < 0
+    const atBottom = list.scrollTop >= list.scrollHeight - list.clientHeight - 1 && state.speed > 0
+    if (atTop || atBottom) {
+      state.speed = 0
+      return
+    }
+    state.raf = requestAnimationFrame(edgeTick)
+  }
+
+  const onListMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
+    const list = listRef.current
+    if (list === null) return
+    const rect = list.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    const depthTop = EDGE_SCROLL_ZONE - y
+    const depthBottom = y - (rect.height - EDGE_SCROLL_ZONE)
+    let speed = 0
+    if (depthTop > 0 && list.scrollTop > 0) {
+      speed = -edgeScrollSpeed(depthTop / EDGE_SCROLL_ZONE)
+    } else if (depthBottom > 0 && list.scrollTop < list.scrollHeight - list.clientHeight - 1) {
+      speed = edgeScrollSpeed(depthBottom / EDGE_SCROLL_ZONE)
+    }
+    const state = edgeScrollRef.current
+    state.speed = speed
+    if (speed !== 0 && state.raf === 0) {
+      state.last = performance.now()
+      state.raf = requestAnimationFrame(edgeTick)
+    }
+  }
 
   // Focus persists briefly after leaving the rail, so the mouse can reach the
   // clickable cascade cards; entering a card cancels the clear, leaving
@@ -343,10 +400,26 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     list.scrollTop = Math.max(0, Math.min(center, list.scrollHeight - list.clientHeight))
   }, [focus])
 
-  // Clear any pending timers on unmount.
+  // Detect band overflow: drives the edge-fade mask + hover auto-scroll.
+  // Re-checked when the dots change and whenever the band itself resizes
+  // (the layout loop above clamps it to the conversation height).
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (list === null) return
+    const check = (): void => setScrollable(list.scrollHeight > list.clientHeight + 1)
+    check()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(check)
+    observer.observe(list)
+    return () => observer.disconnect()
+  }, [dots, align])
+
+  // Clear any pending timers and the edge auto-scroll on unmount.
   useEffect(() => () => {
     if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current)
     if (clearFocusTimerRef.current !== null) window.clearTimeout(clearFocusTimerRef.current)
+    stopEdgeScroll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (!visible) return null
@@ -389,8 +462,12 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     >
       <div
         ref={listRef}
-        className={styles.list}
-        onMouseLeave={scheduleClearFocus}
+        className={scrollable ? `${styles.list} ${styles.listScrollable}` : styles.list}
+        onMouseMove={scrollable ? onListMouseMove : undefined}
+        onMouseLeave={() => {
+          stopEdgeScroll()
+          scheduleClearFocus()
+        }}
       >
         {dots.length === 0 ? (
           <div className={styles.empty}>{t('strip.empty')}</div>
@@ -466,10 +543,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
                     className={cls}
                     role="button"
                     tabIndex={-1}
-                    style={{
-                      width: metrics.widthPx,
-                      filter: `brightness(${metrics.brightness})`,
-                    }}
+                    style={{ width: metrics.widthPx }}
                     onClick={() => onJump(item.dot)}
                   >
                     {isSelected && item.dot.turn !== null ? (

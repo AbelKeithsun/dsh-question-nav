@@ -33,10 +33,12 @@ export function focusScale(distance: number): number {
 }
 
 /** Presentation metrics for the question card of a dot at `distance` from the
- *  selected one. Cards stay crisp (no blur): the selected card is the widest,
- *  brightest and shows every text line; each of its two neighbors on each side
- *  is a slightly narrower, dimmer card clamped to fewer lines. Null outside
- *  the window (no card). */
+ *  selected one. The hierarchy is two-tier: the selected card is the focus
+ *  (widest, full text, brand accent — styled via the selected CSS class), the
+ *  four neighbors are context cards (same clean surface, narrower, clamped to
+ *  fewer lines). Cards are never dimmed or blurred: context must stay crisp
+ *  and readable so it can be recognized — and clicked. Null outside the
+ *  window (no card). */
 export interface FocusCardMetrics {
   /** Card width in px (narrows away from the selected card). */
   widthPx: number
@@ -44,8 +46,6 @@ export interface FocusCardMetrics {
   fontSize: number
   /** Max text lines before clamping (cascade cards). */
   maxLines: number
-  /** Brightness (1 = full, the selected card; dimmer away from it). */
-  brightness: number
 }
 
 export function focusCardMetrics(distance: number): FocusCardMetrics | null {
@@ -53,11 +53,11 @@ export function focusCardMetrics(distance: number): FocusCardMetrics | null {
   if (tier === null) return null
   switch (tier) {
     case 0:
-      return { widthPx: 380, fontSize: 13, maxLines: 6, brightness: 1 }
+      return { widthPx: 380, fontSize: 13, maxLines: 6 }
     case 1:
-      return { widthPx: 300, fontSize: 12.5, maxLines: 2, brightness: 0.82 }
+      return { widthPx: 300, fontSize: 12.5, maxLines: 2 }
     default:
-      return { widthPx: 240, fontSize: 12, maxLines: 1, brightness: 0.68 }
+      return { widthPx: 240, fontSize: 12, maxLines: 1 }
   }
 }
 
@@ -73,4 +73,24 @@ export function magnificationWindow(total: number, selected: number, radius: num
   const hi = Math.min(total - 1, selected + radius)
   for (let i = lo; i <= hi; i++) out.push(i)
   return out
+}
+
+/** Height (px) of the dot band's top/bottom fade zones, which double as hover
+ *  auto-scroll areas (slightly larger than the 22px CSS mask fade). */
+export const EDGE_SCROLL_ZONE = 26
+
+/** Edge auto-scroll speed range (px/s): MIN at the zone boundary, MAX at the
+ *  very edge of the band. */
+export const EDGE_SCROLL_MIN_SPEED = 90
+export const EDGE_SCROLL_MAX_SPEED = 420
+
+/**
+ * Auto-scroll speed (px/s) for a pointer at `ratio` depth into an edge fade
+ * zone (0 = at the zone boundary, 1 = at the band's very edge): eases
+ * linearly from MIN to MAX so a shallow probe scrolls gently and pushing
+ * into the edge moves fast. The sign (direction) is applied by the caller.
+ */
+export function edgeScrollSpeed(ratio: number): number {
+  const r = Math.max(0, Math.min(1, ratio))
+  return EDGE_SCROLL_MIN_SPEED + (EDGE_SCROLL_MAX_SPEED - EDGE_SCROLL_MIN_SPEED) * r
 }

@@ -5,8 +5,9 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  EDGE_SCROLL_MAX_SPEED, EDGE_SCROLL_MIN_SPEED,
   FOCUS_RADIUS, FOCUS_SCALES,
-  focusCardMetrics, focusScale, focusTier, magnificationWindow,
+  edgeScrollSpeed, focusCardMetrics, focusScale, focusTier, magnificationWindow,
 } from '../src/core/focus.ts'
 
 describe('focusTier', () => {
@@ -61,19 +62,37 @@ describe('magnificationWindow', () => {
 })
 
 describe('focusCardMetrics', () => {
-  it('renders the selected card widest, brightest and with every text line', () => {
-    expect(focusCardMetrics(0)).toEqual({ widthPx: 380, fontSize: 13, maxLines: 6, brightness: 1 })
+  it('renders the selected card widest and with every text line', () => {
+    expect(focusCardMetrics(0)).toEqual({ widthPx: 380, fontSize: 13, maxLines: 6 })
   })
-  it('narrows, dims and clamps fewer lines with distance', () => {
+  it('narrows and clamps fewer lines with distance', () => {
     const one = focusCardMetrics(1)!
     const two = focusCardMetrics(2)!
     expect(one.widthPx).toBeGreaterThan(two.widthPx)
     expect(one.fontSize).toBeGreaterThan(two.fontSize)
     expect(one.maxLines).toBeGreaterThan(two.maxLines)
-    expect(one.brightness).toBeGreaterThan(two.brightness)
-    expect(two.brightness).toBeLessThan(1)
+  })
+  it('never dims cards: no brightness in the metrics', () => {
+    for (const distance of [0, 1, 2]) {
+      expect(focusCardMetrics(distance)).not.toHaveProperty('brightness')
+    }
   })
   it('is null outside the window', () => {
     expect(focusCardMetrics(FOCUS_RADIUS + 1)).toBeNull()
+  })
+})
+
+describe('edgeScrollSpeed', () => {
+  it('eases from MIN at the zone boundary to MAX at the very edge', () => {
+    expect(edgeScrollSpeed(0)).toBe(EDGE_SCROLL_MIN_SPEED)
+    expect(edgeScrollSpeed(1)).toBe(EDGE_SCROLL_MAX_SPEED)
+    expect(edgeScrollSpeed(0.5)).toBeCloseTo((EDGE_SCROLL_MIN_SPEED + EDGE_SCROLL_MAX_SPEED) / 2)
+  })
+  it('clamps out-of-range ratios', () => {
+    expect(edgeScrollSpeed(-0.5)).toBe(EDGE_SCROLL_MIN_SPEED)
+    expect(edgeScrollSpeed(2)).toBe(EDGE_SCROLL_MAX_SPEED)
+  })
+  it('increases monotonically with depth', () => {
+    expect(edgeScrollSpeed(0.8)).toBeGreaterThan(edgeScrollSpeed(0.2))
   })
 })

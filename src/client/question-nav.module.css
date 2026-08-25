@@ -25,7 +25,9 @@
    clamped to at most 60% of the conversation height (auto margins center the
    band) and scrolls from the top (auto margins collapse to 0 on overflow).
    The band itself is interactive so wheel-scrolling works over the gaps too
-   (the rail above is pointer-events:none). */
+   (the rail above is pointer-events:none). The native scrollbar is always
+   hidden: this is a minimap scrolled by wheel/trackpad and by hovering the
+   fade zones, and overflow is signalled by the edge fade below. */
 .list {
   flex: 0 1 auto;
   min-height: 0;
@@ -39,8 +41,20 @@
   align-items: center;
   gap: 6px;
   padding: 8px 0;
-  scrollbar-width: thin;
+  scrollbar-width: none;
   pointer-events: auto;
+}
+.list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+/* Overflowing band (applied from JS when scrollHeight > clientHeight): dots
+   fade out towards both edges, signalling "more beyond" without a scrollbar.
+   The fade zones double as hover auto-scroll areas (see QuestionNavStrip). */
+.listScrollable {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 22px, black calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 22px, black calc(100% - 22px), transparent);
 }
 .list > *:first-child {
   margin-top: auto;
@@ -130,19 +144,21 @@
   pointer-events: none;
 }
 
-/* One focus question card (portal-rendered in the cascade). Solid, crisp —
-   no blur — with the width set per cascade tier. Clicking jumps to the
-   question, like the dot. */
+/* One focus question card (portal-rendered in the cascade). The four context
+   cards use the base style: a clean solid surface, a quiet neutral border and
+   a low shadow — crisp and readable, one visual step behind the focus card.
+   Clicking jumps to the question, like the dot; hover raises the border to
+   signal the card is interactive. */
 .card {
   width: 380px;
   background: var(--dsw-alias-bg-layer-1);
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
   padding: 8px 12px 10px;
   font-size: 13px;
   line-height: 18px;
-  color: var(--dsw-alias-label-primary);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  color: var(--dsw-alias-label-secondary);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.10);
   white-space: normal;
   word-break: break-word;
   pointer-events: auto;
@@ -151,13 +167,25 @@
 }
 .card:hover {
   border-color: var(--dsw-alias-brand-primary);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+  color: var(--dsw-alias-label-primary);
 }
 
-/* The selected (center) card: marked brighter with a brand edge, so the
-   center card is distinct from the four unselected cascade cards. */
+/* The selected (center) card — the focus of the cascade: full-contrast text,
+   a brand left accent bar (inset, so it follows the rounded corners) and a
+   raised shadow lift it above the four context cards. */
 .cardSelected {
+  border-color: var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-primary);
+  box-shadow:
+    inset 3px 0 0 0 var(--dsw-alias-brand-primary),
+    0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.cardSelected:hover {
   border-color: var(--dsw-alias-brand-primary);
+  box-shadow:
+    inset 3px 0 0 0 var(--dsw-alias-brand-primary),
+    0 6px 22px rgba(0, 0, 0, 0.26);
 }
 
 /* Turn label line at the top of the card ("Turn 32"). */
@@ -176,11 +204,11 @@
 }
 
 /* Clamped cascade-card text (the two neighbors on each side): N lines with
-   ellipsis via -webkit-line-clamp (set inline). */
+   ellipsis via -webkit-line-clamp (set inline). Inherits the card's text
+   color (secondary on context cards, primary on the focus card). */
 .cardClamp {
   font-size: 13px;
   line-height: 18px;
-  color: var(--dsw-alias-label-primary);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   overflow: hidden;

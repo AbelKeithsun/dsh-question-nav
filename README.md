@@ -46,13 +46,19 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
   stacked top-to-bottom without overlap and centered on the selected dot. Each
   card shows the turn's **full question text** (all of them, when one turn
   batched several) and the question's **sent time** (`HH:MM` on the same day,
-  `MM-DD HH:MM` across days, `YYYY-MM-DD HH:MM` across years). The **center
-  card is the brightest** and marked with a brand edge; cards further from it
-  are slightly narrower, dimmer and show fewer lines. **Clicking any card
-  jumps to that question** exactly like clicking its dot.
+  `MM-DD HH:MM` across days, `YYYY-MM-DD HH:MM` across years). The hierarchy
+  is two-tier: the **center card is the focus** — full-contrast text, a brand
+  accent bar and a raised shadow — while the four neighbors are clean
+  **context cards** (same surface, narrower, fewer lines) that light up on
+  hover to show they are clickable too. **Clicking any card jumps to that
+  question** exactly like clicking its dot.
 - **Click**: jumps to that question. Only then does the jump loop page the
   window (`loadOlder()`) to bring that specific page into view — never the
   whole history up front.
+- **Elegant overflow scroll**: when many dots don't fit the 60% band, the
+  native scrollbar is hidden and the column fades out at its top and bottom
+  edges; hovering either fade zone gently auto-scrolls so hidden dots flow
+  into the clear, clickable area (wheel and trackpad still scroll too).
 - Empty/left areas of the rail pass pointer events through to the conversation
   (it never blocks the chat).
 
