@@ -12,8 +12,8 @@
  * vertical cascade of question cards opens — the selected (center) card is the
  * focus (brand accent, elevated, full question text), the four neighbors are
  * narrower context cards clamped to fewer lines. Every card is clickable and
- * jumps to its question, exactly like clicking the dot; the rail auto-centers
- * the selected dot.
+ * jumps to its question, exactly like clicking the dot; the rail scrolls the
+ * selected dot into view only when it is clipped by the band's edges.
  *
  * Data source: the host-folded `questionIndex` session projection (whole
  * history, persisted host-side, pushed live through session/projection
@@ -37,7 +37,7 @@ import type { QuestionEntry } from '../core/question-entry.ts'
 import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
 import type { AlignPreference } from '../core/align.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
-import { EDGE_SCROLL_ZONE, FOCUS_RADIUS, edgeScrollSpeed, focusCardMetrics, focusScale, focusTier } from '../core/focus.ts'
+import { EDGE_SCROLL_DWELL_MS, EDGE_SCROLL_ZONE, FOCUS_RADIUS, edgeScrollSpeed, focusCardMetrics, focusScale, focusTier, minimalScrollIntoView } from '../core/focus.ts'
 import { formatQuestionTime } from '../core/time.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -159,8 +159,20 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   // flow into the clear area. Speed follows how deep the pointer is inside
   // the zone; a rAF loop applies it smoothly while it is non-zero.
   const edgeScrollRef = useRef<{ speed: number; raf: number; last: number }>({ speed: 0, raf: 0, last: 0 })
+  // Hover-intent dwell timer: auto-scroll only starts after the pointer rests
+  // in a fade zone for EDGE_SCROLL_DWELL_MS, so browsing dot-by-dot (or just
+  // passing through the zone) never triggers an unwanted scroll.
+  const edgeDwellRef = useRef<number | null>(null)
+
+  const cancelEdgeDwell = (): void => {
+    if (edgeDwellRef.current !== null) {
+      window.clearTimeout(edgeDwellRef.current)
+      edgeDwellRef.current = null
+    }
+  }
 
   const stopEdgeScroll = (): void => {
+    cancelEdgeDwell()
     edgeScrollRef.current.speed = 0
     if (edgeScrollRef.current.raf !== 0) {
       cancelAnimationFrame(edgeScrollRef.current.raf)
@@ -190,21 +202,38 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const onListMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
     const list = listRef.current
     if (list === null) return
+    // Hovering a dot is never a scroll intent: the user is reading that dot's
+    // card, so suppress auto-scroll while the pointer is over any dot.
+    const overDot = (e.target as HTMLElement).closest('[data-question-nav-index]') !== null
     const rect = list.getBoundingClientRect()
     const y = e.clientY - rect.top
     const depthTop = EDGE_SCROLL_ZONE - y
     const depthBottom = y - (rect.height - EDGE_SCROLL_ZONE)
     let speed = 0
-    if (depthTop > 0 && list.scrollTop > 0) {
-      speed = -edgeScrollSpeed(depthTop / EDGE_SCROLL_ZONE)
-    } else if (depthBottom > 0 && list.scrollTop < list.scrollHeight - list.clientHeight - 1) {
-      speed = edgeScrollSpeed(depthBottom / EDGE_SCROLL_ZONE)
+    if (!overDot) {
+      if (depthTop > 0 && list.scrollTop > 0) {
+        speed = -edgeScrollSpeed(depthTop / EDGE_SCROLL_ZONE)
+      } else if (depthBottom > 0 && list.scrollTop < list.scrollHeight - list.clientHeight - 1) {
+        speed = edgeScrollSpeed(depthBottom / EDGE_SCROLL_ZONE)
+      }
     }
     const state = edgeScrollRef.current
     state.speed = speed
-    if (speed !== 0 && state.raf === 0) {
-      state.last = performance.now()
-      state.raf = requestAnimationFrame(edgeTick)
+    if (speed === 0) {
+      // Left the zone (or moved onto a dot): cancel any pending dwell and stop.
+      stopEdgeScroll()
+      return
+    }
+    if (state.raf === 0 && edgeDwellRef.current === null) {
+      // Start only after the pointer has rested in the zone for the dwell
+      // time; re-check at fire time because the pointer may have left.
+      edgeDwellRef.current = window.setTimeout(() => {
+        edgeDwellRef.current = null
+        if (edgeScrollRef.current.speed !== 0 && edgeScrollRef.current.raf === 0) {
+          edgeScrollRef.current.last = performance.now()
+          edgeScrollRef.current.raf = requestAnimationFrame(edgeTick)
+        }
+      }, EDGE_SCROLL_DWELL_MS)
     }
   }
 
@@ -383,21 +412,31 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     }
   }, [visible, align])
 
-  // Keep the focused dot centered in the (≤60% tall, scrollable) band so its
-  // two neighbors on each side stay visible. Re-centers only when the focused
-  // key changes; scrolls instantly to avoid chasing a fast-moving hover.
+  // Keep the focused dot visible inside the (≤60% tall, scrollable) band:
+  // scroll only when the dot (plus room for its two magnified neighbors) is
+  // clipped by the band edges, and then only by the minimal amount — never
+  // re-center an already-visible dot, so browsing dot-by-dot doesn't shift
+  // the band under the pointer. Suppressed while the edge auto-scroll is
+  // driving: hovering dots that flow under a parked pointer would otherwise
+  // fight the scroll.
   useLayoutEffect(() => {
     const key = focus?.key ?? null
     if (lastFocusedKeyRef.current === key) return
     lastFocusedKeyRef.current = key
     if (key === null) return
+    if (edgeScrollRef.current.raf !== 0) return
     const list = listRef.current
     if (list === null) return
     const target = list.querySelector<HTMLElement>('[data-question-nav-focused="true"]')
     if (target === null) return
-    const delta = target.offsetTop - list.offsetTop
-    const center = delta - (list.clientHeight - target.offsetHeight) / 2
-    list.scrollTop = Math.max(0, Math.min(center, list.scrollHeight - list.clientHeight))
+    const next = minimalScrollIntoView(
+      list.scrollTop,
+      list.clientHeight,
+      list.scrollHeight,
+      target.offsetTop - list.offsetTop,
+      target.offsetHeight,
+    )
+    if (next !== null) list.scrollTop = next
   }, [focus])
 
   // Detect band overflow: drives the edge-fade mask + hover auto-scroll.

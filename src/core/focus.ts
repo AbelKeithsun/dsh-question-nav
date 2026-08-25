@@ -79,6 +79,42 @@ export function magnificationWindow(total: number, selected: number, radius: num
  *  auto-scroll areas (slightly larger than the 22px CSS mask fade). */
 export const EDGE_SCROLL_ZONE = 26
 
+/** Clearance (px) kept around the focused dot when scrolling it into view, so
+ *  its two magnified neighbors on each side stay inside the band's clear area
+ *  (2 dot rows ≈ 28px + the 22px fade zone). */
+export const FOCUS_NEIGHBOR_CLEARANCE = 50
+
+/**
+ * Minimal "scroll into view" for the focused dot, in the spirit of
+ * scrollIntoView({ block: 'nearest' }): returns the scrollTop that brings the
+ * dot — plus `clearance` room for its magnified neighbors — inside the
+ * visible band with the smallest possible movement, or null when the dot is
+ * already fully visible. Unlike unconditional centering this never shifts the
+ * band while the user browses dot-by-dot: only a clipped dot is scrolled.
+ */
+export function minimalScrollIntoView(
+  scrollTop: number,
+  clientHeight: number,
+  scrollHeight: number,
+  dotTop: number,
+  dotHeight: number,
+  clearance: number = FOCUS_NEIGHBOR_CLEARANCE,
+): number | null {
+  const margin = Math.min(clearance, clientHeight / 4)
+  const viewTop = scrollTop + margin
+  const viewBottom = scrollTop + clientHeight - margin
+  if (dotTop >= viewTop && dotTop + dotHeight <= viewBottom) return null
+  const next = dotTop < viewTop
+    ? dotTop - margin
+    : dotTop + dotHeight + margin - clientHeight
+  return Math.max(0, Math.min(next, Math.max(0, scrollHeight - clientHeight)))
+}
+
+/** Hover-intent dwell (ms): the pointer must rest inside a fade zone this
+ *  long before auto-scroll starts, so sweeping up/down the dots one by one
+ *  (or just passing through the zone) never triggers an unwanted scroll. */
+export const EDGE_SCROLL_DWELL_MS = 200
+
 /** Edge auto-scroll speed range (px/s): MIN at the zone boundary, MAX at the
  *  very edge of the band. */
 export const EDGE_SCROLL_MIN_SPEED = 90

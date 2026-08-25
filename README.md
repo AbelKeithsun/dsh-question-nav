@@ -40,7 +40,8 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
   never touched), the official projection cache persists it across restarts,
   and push frames deliver new questions live.
 - **Hover (focus)**: the dot and its **two neighbors on each side** magnify
-  progressively (selected largest), the rail auto-centers the selection, and a
+  progressively (selected largest), the rail scrolls the selection into view
+  only when clipped by the band's edges, and a
   **vertical cascade of five crisp question cards** (portal-rendered, no
   native-title delay) appears beside the rail — one card per window dot,
   stacked top-to-bottom without overlap and centered on the selected dot. Each
