@@ -559,7 +559,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
                Hovering the cascade keeps it alive (the rail only re-arms its
                clear once the mouse leaves both). */
             <div
-              className={styles.cascade}
+              className={align === 'right' ? `${styles.cascade} ${styles.cascadeRight}` : styles.cascade}
               style={{
                 ...(focus.left !== undefined ? { left: focus.left } : {}),
                 ...(focus.right !== undefined ? { right: focus.right } : {}),
@@ -578,7 +578,9 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
                 // question's sent time, and clicking any card jumps to its
                 // question exactly like clicking the dot.
                 const text = item.dot.texts.join(' · ')
-                const cls = isSelected ? `${styles.card} ${styles.cardSelected}` : styles.card
+                const cls = isSelected
+                  ? `${styles.card} ${styles.cardSelected}${align === 'right' ? ` ${styles.cardSelectedRight}` : ''}`
+                  : styles.card
                 return (
                   <div
                     key={item.dot.key}

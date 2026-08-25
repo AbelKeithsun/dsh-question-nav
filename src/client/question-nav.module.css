@@ -230,6 +230,12 @@
   pointer-events: none;
 }
 
+/* Right-aligned rail: the cascade opens to the LEFT of the rail, so the
+   column hugs the rail by stacking its cards against the right edge. */
+.cascadeRight {
+  align-items: flex-end;
+}
+
 /* One focus question card (portal-rendered in the cascade). The four context
    cards use the base style: a clean solid surface, a quiet neutral border and
    a low shadow — crisp and readable, one visual step behind the focus card.
@@ -277,6 +283,20 @@
     0 6px 22px rgba(0, 0, 0, 0.26);
 }
 
+/* Right-aligned rail: the focus card's accent bar mirrors to the right edge
+   (the side facing the rail). Declared after .cardSelected:hover so the
+   mirrored bar wins at equal specificity. */
+.cardSelectedRight {
+  box-shadow:
+    inset -3px 0 0 0 var(--dsw-alias-brand-primary),
+    0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.cardSelectedRight:hover {
+  box-shadow:
+    inset -3px 0 0 0 var(--dsw-alias-brand-primary),
+    0 6px 22px rgba(0, 0, 0, 0.26);
+}
+
 /* Turn label line at the top of the card ("Turn 32"). */
 .cardTitle {
   font-size: 11px;
@@ -285,11 +305,18 @@
   margin-bottom: 4px;
 }
 
-/* Question body; long multi-question turns scroll inside the card. */
+/* Question body; long multi-question turns scroll inside the card. The
+   scrollbar stays themed: NO `scrollbar-width` here — a non-auto value makes
+   Chromium/Safari drop the GUI's `::-webkit-scrollbar*` skin for this element
+   (see ui-theme styles/scrollbar.css). Firefox still gets a thin themed bar
+   from the theme's `body *` rule, which reads the rebound tokens below. */
 .cardBody {
   max-height: 96px;
   overflow-y: auto;
-  scrollbar-width: thin;
+  /* Elevated surface (bg-layer-3): the scrollbar thumb takes the l2 elevation
+     tokens, matching DSH menus/popovers. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 /* Clamped cascade-card text (the two neighbors on each side): N lines with
