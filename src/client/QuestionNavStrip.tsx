@@ -36,7 +36,7 @@ import type { QuestionEntry } from '../core/question-entry.ts'
 import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
 import type { AlignPreference } from '../core/align.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
-import { focusScale, focusTier, stackLayers } from '../core/focus.ts'
+import { FOCUS_RADIUS, focusCardMetrics, focusScale, focusTier } from '../core/focus.ts'
 import { formatQuestionTime } from '../core/time.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -78,14 +78,25 @@ const FAILURE_HINTS: Record<JumpFailureCode, QuestionNavKey> = {
   TIMEOUT: 'jump.timeout',
 }
 
-/** Live position + content of the focused question card. */
-interface FocusState {
-  /** The focused (hovered) dot. */
+/** One card of the focus cascade: a dot inside the magnification window. */
+interface FocusWindowItem {
   dot: TurnDot
+  /** Distance from the selected dot (0 = selected, 1/2 = cascade neighbors). */
+  distance: number
+}
+
+/** The focus cascade: a vertical column of one card per window dot,
+ *  non-overlapping, centered on the selected dot. */
+interface FocusState {
+  /** The selected (hovered) dot's key. */
+  key: string
+  /** Every dot of the focus window, in dot order. */
+  items: FocusWindowItem[]
+  /** Vertical center (viewport px) of the selected dot — the column centers on it. */
+  centerY: number
   /** Horizontal anchor — left edge (left-aligned rail) or right edge (right-aligned). */
   left?: number
   right?: number
-  top: number
 }
 
 /** Read the projection face value as a question-entry list (structural guard). */
@@ -132,10 +143,27 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const panelRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const hintTimerRef = useRef<number | null>(null)
+  // Pending focus-clear timer: lets the mouse move from the rail onto a
+  // cascade card without dropping the cascade mid-flight.
+  const clearFocusTimerRef = useRef<number | null>(null)
   // Last rendered dot list, for the change-detection bail-out below.
   const lastDotsRef = useRef<TurnDot[]>([])
   // Last focused dot key, so re-hovering the same dot after a gap re-centers it.
   const lastFocusedKeyRef = useRef<string | null>(null)
+
+  // Focus persists briefly after leaving the rail, so the mouse can reach the
+  // clickable cascade cards; entering a card cancels the clear, leaving
+  // everything re-arms it.
+  const cancelClearFocus = (): void => {
+    if (clearFocusTimerRef.current !== null) {
+      window.clearTimeout(clearFocusTimerRef.current)
+      clearFocusTimerRef.current = null
+    }
+  }
+  const scheduleClearFocus = (): void => {
+    cancelClearFocus()
+    clearFocusTimerRef.current = window.setTimeout(() => setFocus(null), 240)
+  }
 
   // Follow the rail anchor edge from the settings scope (a change re-anchors
   // the rail through the layout effect below).
@@ -302,7 +330,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   // two neighbors on each side stay visible. Re-centers only when the focused
   // key changes; scrolls instantly to avoid chasing a fast-moving hover.
   useLayoutEffect(() => {
-    const key = focus?.dot.key ?? null
+    const key = focus?.key ?? null
     if (lastFocusedKeyRef.current === key) return
     lastFocusedKeyRef.current = key
     if (key === null) return
@@ -315,9 +343,10 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     list.scrollTop = Math.max(0, Math.min(center, list.scrollHeight - list.clientHeight))
   }, [focus])
 
-  // Clear any pending hint timer on unmount.
+  // Clear any pending timers on unmount.
   useEffect(() => () => {
     if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current)
+    if (clearFocusTimerRef.current !== null) window.clearTimeout(clearFocusTimerRef.current)
   }, [])
 
   if (!visible) return null
@@ -330,20 +359,27 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   }
 
   const openFocus = (dot: TurnDot, target: HTMLElement): void => {
+    const index = dots.findIndex((d) => d.key === dot.key)
+    if (index < 0) return
+    cancelClearFocus()
     const r = target.getBoundingClientRect()
-    setFocus({
-      dot,
-      // The card opens away from the rail: to the right of the dot on a
-      // left-anchored rail, to the left on a right-anchored one.
-      ...(align === 'right'
-        ? { right: window.innerWidth - r.left + 10 }
-        : { left: r.right + 10 }),
-      top: r.top,
-    })
+    // The cascade opens away from the rail: to the right of the dots on a
+    // left-anchored rail, to the left on a right-anchored one. The column is
+    // vertically centered on the selected dot (top: centerY + translateY(-50%)).
+    const horizontal = align === 'right'
+      ? { right: window.innerWidth - r.left + 10 }
+      : { left: r.right + 10 }
+    const lo = Math.max(0, index - FOCUS_RADIUS)
+    const hi = Math.min(dots.length - 1, index + FOCUS_RADIUS)
+    const items: FocusWindowItem[] = []
+    for (let i = lo; i <= hi; i++) {
+      items.push({ dot: dots[i], distance: Math.abs(i - index) })
+    }
+    setFocus({ key: dot.key, items, centerY: r.top + r.height / 2, ...horizontal })
   }
 
   const t = props.t
-  const selectedIndex = focus === null ? -1 : dots.findIndex((d) => d.key === focus.dot.key)
+  const selectedIndex = focus === null ? -1 : dots.findIndex((d) => d.key === focus.key)
 
   return (
     <div
@@ -354,7 +390,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       <div
         ref={listRef}
         className={styles.list}
-        onMouseLeave={() => setFocus(null)}
+        onMouseLeave={scheduleClearFocus}
       >
         {dots.length === 0 ? (
           <div className={styles.empty}>{t('strip.empty')}</div>
@@ -362,7 +398,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
           <div className={styles.dots}>
             <span className={styles.count}>{dots.length}</span>
             {dots.map((dot, index) => {
-              const isFocused = focus !== null && focus.dot.key === dot.key
+              const isFocused = focus !== null && focus.key === dot.key
               // Progressive magnification: selected largest, ±1 smaller, ±2
               // smaller still, the rest base scale.
               const tier = selectedIndex < 0 ? null : focusTier(index - selectedIndex)
@@ -376,6 +412,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
                   className={cls.join(' ')}
                   style={{ transform: `scale(${scale})` }}
                   data-question-nav-focused={isFocused ? 'true' : undefined}
+                  data-question-nav-index={index}
                   aria-label={dot.texts[0] ?? ''}
                   onMouseEnter={(e) => openFocus(dot, e.currentTarget)}
                   onClick={() => onJump(dot)}
@@ -398,30 +435,64 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
         : null}
       {focus !== null
         ? createPortal(
-            <div className={styles.card} style={{ left: focus.left, right: focus.right, top: focus.top }}>
-              {focus.dot.turn !== null ? (
-                <div className={styles.cardTitle}>Turn {focus.dot.turn}</div>
-              ) : null}
-              <div className={styles.cardBody}>
-                {focus.dot.texts.map((line, index) => (
-                  <div key={index} className={styles.cardLine}>{line}</div>
-                ))}
-              </div>
-              <div className={styles.cardTime}>{formatQuestionTime(focus.dot.time, Date.now())}</div>
-              {/* Decorative stack: blurred cards fanning out below the card. */}
-              <div className={styles.stack} aria-hidden="true">
-                {stackLayers().map((layer, index) => (
+            /* The vertical cascade: one crisp card per window dot, stacked
+               non-overlapping, vertically centered on the selected dot.
+               Hovering the cascade keeps it alive (the rail only re-arms its
+               clear once the mouse leaves both). */
+            <div
+              className={styles.cascade}
+              style={{
+                ...(focus.left !== undefined ? { left: focus.left } : {}),
+                ...(focus.right !== undefined ? { right: focus.right } : {}),
+                top: focus.centerY,
+                transform: 'translateY(-50%)',
+              }}
+              onMouseEnter={cancelClearFocus}
+              onMouseLeave={scheduleClearFocus}
+            >
+              {focus.items.map((item) => {
+                const metrics = focusCardMetrics(item.distance)
+                if (metrics === null) return null
+                const isSelected = item.distance === 0
+                // Cascade cards join their dot's texts into one clamped line;
+                // the selected card keeps every line. Every card shows the
+                // question's sent time, and clicking any card jumps to its
+                // question exactly like clicking the dot.
+                const text = item.dot.texts.join(' · ')
+                const cls = isSelected ? `${styles.card} ${styles.cardSelected}` : styles.card
+                return (
                   <div
-                    key={index}
-                    className={styles.stackCard}
+                    key={item.dot.key}
+                    className={cls}
+                    role="button"
+                    tabIndex={-1}
                     style={{
-                      transform: `translateY(${layer.dy}px) rotate(${layer.rotate}deg) scale(${layer.scale})`,
-                      filter: `blur(${layer.blur}px)`,
-                      opacity: layer.opacity,
+                      width: metrics.widthPx,
+                      filter: `brightness(${metrics.brightness})`,
                     }}
-                  />
-                ))}
-              </div>
+                    onClick={() => onJump(item.dot)}
+                  >
+                    {isSelected && item.dot.turn !== null ? (
+                      <div className={styles.cardTitle}>Turn {item.dot.turn}</div>
+                    ) : null}
+                    <div
+                      className={isSelected ? styles.cardBody : styles.cardClamp}
+                      style={
+                        isSelected
+                          ? undefined
+                          : ({ WebkitLineClamp: metrics.maxLines, fontSize: metrics.fontSize } as React.CSSProperties)
+                      }
+                    >
+                      {isSelected
+                        ? item.dot.texts.map((line, lineIndex) => (
+                            <div key={lineIndex} className={styles.cardLine}>{line}</div>
+                          ))
+                        : text}
+                    </div>
+                    <div className={styles.cardTime}>{formatQuestionTime(item.dot.time, Date.now())}</div>
+                  </div>
+                )
+              })}
             </div>,
             document.body,
           )

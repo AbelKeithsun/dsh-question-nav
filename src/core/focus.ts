@@ -1,9 +1,10 @@
 /**
  * Focus-magnification model for the question-nav rail. Pure index/scale math
  * for the hover-selected dot's neighborhood window, its progressive
- * magnification tiers, and the decorative stack fanning out under the
- * selected question card. No React, no DOM — every function here is
- * unit-testable in isolation and safe to inline into the client bundle.
+ * magnification tiers, and the vertical cascade of question cards (one per
+ * window dot, non-overlapping, sizes descending away from the selected one).
+ * No React, no DOM — every function here is unit-testable in isolation and
+ * safe to inline into the client bundle.
  *
  * @module dsh-question-nav/focus
  */
@@ -14,9 +15,6 @@ export const FOCUS_RADIUS = 2
 /** Magnification scale per tier, by distance from the selected dot
  * (0 = selected, 1 = immediate neighbor, 2 = outer window edge). */
 export const FOCUS_SCALES = [2.0, 1.55, 1.25] as const
-
-/** Number of decorative stack cards peeking under the selected card. */
-export const STACK_LAYER_COUNT = 2
 
 /**
  * The focus tier of a dot at `distance` from the selected dot: 0..FOCUS_RADIUS
@@ -34,6 +32,35 @@ export function focusScale(distance: number): number {
   return tier === null ? 1 : FOCUS_SCALES[tier]
 }
 
+/** Presentation metrics for the question card of a dot at `distance` from the
+ *  selected one. Cards stay crisp (no blur): the selected card is the widest,
+ *  brightest and shows every text line; each of its two neighbors on each side
+ *  is a slightly narrower, dimmer card clamped to fewer lines. Null outside
+ *  the window (no card). */
+export interface FocusCardMetrics {
+  /** Card width in px (narrows away from the selected card). */
+  widthPx: number
+  /** Text font size (px); cascade cards are slightly smaller. */
+  fontSize: number
+  /** Max text lines before clamping (cascade cards). */
+  maxLines: number
+  /** Brightness (1 = full, the selected card; dimmer away from it). */
+  brightness: number
+}
+
+export function focusCardMetrics(distance: number): FocusCardMetrics | null {
+  const tier = focusTier(distance)
+  if (tier === null) return null
+  switch (tier) {
+    case 0:
+      return { widthPx: 380, fontSize: 13, maxLines: 6, brightness: 1 }
+    case 1:
+      return { widthPx: 300, fontSize: 12.5, maxLines: 2, brightness: 0.82 }
+    default:
+      return { widthPx: 240, fontSize: 12, maxLines: 1, brightness: 0.68 }
+  }
+}
+
 /**
  * Indices of the focus window: the selected dot plus `radius` on each side,
  * clipped to the dot list. Empty when the list is empty or `selected` is out
@@ -46,38 +73,4 @@ export function magnificationWindow(total: number, selected: number, radius: num
   const hi = Math.min(total - 1, selected + radius)
   for (let i = lo; i <= hi; i++) out.push(i)
   return out
-}
-
-/** One decorative stack card under the selected question card. */
-export interface StackLayer {
-  /** Downward offset (px) from the card's bottom edge. */
-  dy: number
-  /** Alternating rotation (deg) for the fan effect. */
-  rotate: number
-  /** Slight shrink for depth. */
-  scale: number
-  /** Frosted blur radius (px); deeper cards blur more. */
-  blur: number
-  /** Fade; deeper cards dim more. */
-  opacity: number
-}
-
-/**
- * The decorative stack: `count` cards fanning out below the selected card,
- * each a bit lower, more rotated, smaller, blurrier and dimmer — a shallow
- * deck peeking out from under the focused card.
- */
-export function stackLayers(count: number = STACK_LAYER_COUNT): readonly StackLayer[] {
-  const layers: StackLayer[] = []
-  for (let i = 0; i < count; i++) {
-    const k = i + 1
-    layers.push({
-      dy: k * 8,
-      rotate: (i % 2 === 0 ? 1 : -1) * (1.5 + i * 1.5),
-      scale: 1 - k * 0.04,
-      blur: k * 1.5,
-      opacity: Math.max(0.35, 0.85 - k * 0.2),
-    })
-  }
-  return layers
 }

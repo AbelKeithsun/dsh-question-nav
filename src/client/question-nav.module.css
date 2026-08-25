@@ -117,28 +117,47 @@
   pointer-events: none;
 }
 
-/* Focus question card (portal-rendered beside the selected dot). Frosted /
-   virtual look: translucent fill + backdrop blur, so the conversation shows
-   through while the question stays readable. */
-.card {
+/* The vertical focus cascade: one crisp question card per window dot, stacked
+   top-to-bottom without overlap, centered on the selected dot. The container
+   stays pass-through; only the cards are interactive. */
+.cascade {
   position: fixed;
   z-index: 20;
-  max-width: 420px;
-  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+/* One focus question card (portal-rendered in the cascade). Solid, crisp —
+   no blur — with the width set per cascade tier. Clicking jumps to the
+   question, like the dot. */
+.card {
+  width: 380px;
   background: var(--dsw-alias-bg-layer-1);
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 82%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 10px;
   padding: 8px 12px 10px;
   font-size: 13px;
   line-height: 18px;
   color: var(--dsw-alias-label-primary);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
   white-space: normal;
   word-break: break-word;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.card:hover {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.26);
+}
+
+/* The selected (center) card: marked brighter with a brand edge, so the
+   center card is distinct from the four unselected cascade cards. */
+.cardSelected {
+  border-color: var(--dsw-alias-brand-primary);
 }
 
 /* Turn label line at the top of the card ("Turn 32"). */
@@ -156,6 +175,18 @@
   scrollbar-width: thin;
 }
 
+/* Clamped cascade-card text (the two neighbors on each side): N lines with
+   ellipsis via -webkit-line-clamp (set inline). */
+.cardClamp {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
 /* One question text line; consecutive lines (multi-question turns) separate. */
 .cardLine + .cardLine {
   margin-top: 6px;
@@ -168,27 +199,6 @@
   margin-top: 6px;
   font-size: 11px;
   color: var(--dsw-alias-label-tertiary);
-}
-
-/* Decorative stack under the selected card: a shallow deck of blurred cards
-   fanning out below the card's bottom edge (behind it via negative z-index). */
-.stack {
-  position: absolute;
-  top: 100%;
-  left: 6px;
-  right: 6px;
-  height: 0;
-  z-index: -1;
-}
-.stackCard {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 64px;
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-layer-1);
-  border: 1px solid var(--dsw-alias-border-l1);
 }
 
 /* Settings page (settings.plugins.tab). */

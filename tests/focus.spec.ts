@@ -1,11 +1,12 @@
 /**
  * Unit tests for the focus-magnification model: window indices (clipped to
- * the dot list), progressive scale tiers, and the decorative stack layers.
+ * the dot list), progressive scale tiers, and the cascade card metrics
+ * (widths/fonts descending away from the selected card).
  */
 import { describe, expect, it } from 'vitest'
 import {
-  FOCUS_RADIUS, FOCUS_SCALES, STACK_LAYER_COUNT,
-  focusScale, focusTier, magnificationWindow, stackLayers,
+  FOCUS_RADIUS, FOCUS_SCALES,
+  focusCardMetrics, focusScale, focusTier, magnificationWindow,
 } from '../src/core/focus.ts'
 
 describe('focusTier', () => {
@@ -59,22 +60,20 @@ describe('magnificationWindow', () => {
   })
 })
 
-describe('stackLayers', () => {
-  it('emits the default count of deepening cards', () => {
-    const layers = stackLayers()
-    expect(layers).toHaveLength(STACK_LAYER_COUNT)
+describe('focusCardMetrics', () => {
+  it('renders the selected card widest, brightest and with every text line', () => {
+    expect(focusCardMetrics(0)).toEqual({ widthPx: 380, fontSize: 13, maxLines: 6, brightness: 1 })
   })
-  it('spreads cards lower, thinner, more rotated, blurrier and dimmer', () => {
-    const layers = stackLayers(3)
-    expect(layers[1].dy).toBeGreaterThan(layers[0].dy)
-    expect(layers[1].scale).toBeLessThan(layers[0].scale)
-    expect(layers[1].blur).toBeGreaterThan(layers[0].blur)
-    expect(layers[1].opacity).toBeLessThan(layers[0].opacity)
-    // Alternating fan rotation.
-    expect(Math.sign(layers[0].rotate)).toBe(1)
-    expect(Math.sign(layers[1].rotate)).toBe(-1)
+  it('narrows, dims and clamps fewer lines with distance', () => {
+    const one = focusCardMetrics(1)!
+    const two = focusCardMetrics(2)!
+    expect(one.widthPx).toBeGreaterThan(two.widthPx)
+    expect(one.fontSize).toBeGreaterThan(two.fontSize)
+    expect(one.maxLines).toBeGreaterThan(two.maxLines)
+    expect(one.brightness).toBeGreaterThan(two.brightness)
+    expect(two.brightness).toBeLessThan(1)
   })
-  it('emits nothing for count 0', () => {
-    expect(stackLayers(0)).toEqual([])
+  it('is null outside the window', () => {
+    expect(focusCardMetrics(FOCUS_RADIUS + 1)).toBeNull()
   })
 })
