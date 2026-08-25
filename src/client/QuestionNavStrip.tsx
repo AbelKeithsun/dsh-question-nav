@@ -1,12 +1,18 @@
 /**
  * Question-nav minimap. Renders a vertical column of small round dots overlaid
  * on the LEFT edge of the conversation column (via the frame-wide
- * `shell.overlay` floating layer), vertically centered: one dot per turn that
- * claimed at least one user question — strictly aligned with the Trajectory
- * view's turn numbering (turns without a question produce no dot). Hover
- * enlarges a dot and shows an instant tooltip (portal-rendered, no native
- * delay) with the turn label and the turn's question text(s); clicking jumps
- * the chat to that turn's first question.
+ * `shell.overlay` floating layer): one dot per turn that claimed at least one
+ * user question — strictly aligned with the Trajectory view's turn numbering
+ * (turns without a question produce no dot). The dot column is vertically
+ * centered and clamped to at most 60% of the conversation height, scrolling
+ * within that band when the session has more dots than fit.
+ *
+ * Hovering a dot "selects" it: the selected dot plus its two immediate
+ * neighbors on each side magnify (progressively smaller with distance), the
+ * selected dot reveals a frosted question card (turn label, full question
+ * text, sent time) with a decorative stack of blurred cards fanning out
+ * below it, and the rail auto-centers the selected dot. Clicking jumps the
+ * chat to that turn's first question.
  *
  * Data source: the host-folded `questionIndex` session projection (whole
  * history, persisted host-side, pushed live through session/projection
@@ -30,6 +36,8 @@ import type { QuestionEntry } from '../core/question-entry.ts'
 import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
 import type { AlignPreference } from '../core/align.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
+import { focusScale, focusTier, stackLayers } from '../core/focus.ts'
+import { formatQuestionTime } from '../core/time.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
 
@@ -70,12 +78,10 @@ const FAILURE_HINTS: Record<JumpFailureCode, QuestionNavKey> = {
   TIMEOUT: 'jump.timeout',
 }
 
-/** Live position of the instant hover tooltip. */
-interface TooltipState {
-  /** Turn label line (e.g. "Turn 32"); null for ungrouped live questions. */
-  title: string | null
-  /** Question text lines (one per question folded into the dot). */
-  lines: readonly string[]
+/** Live position + content of the focused question card. */
+interface FocusState {
+  /** The focused (hovered) dot. */
+  dot: TurnDot
   /** Horizontal anchor — left edge (left-aligned rail) or right edge (right-aligned). */
   left?: number
   right?: number
@@ -98,8 +104,8 @@ function findConvRoot(): HTMLElement | null {
 }
 
 /** Structural equality of two dot lists (member keys fully capture a dot's
- * folded questions, so identical key sequences mean identical content).
- * Lets the strip skip a re-render when a refresh produced no change. */
+ *  folded questions, so identical key sequences mean identical content).
+ *  Lets the strip skip a re-render when a refresh produced no change. */
 function sameDots(a: readonly TurnDot[], b: readonly TurnDot[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) {
@@ -121,12 +127,15 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const [dots, setDots] = useState<TurnDot[]>([])
   const [jumpingKey, setJumpingKey] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null)
+  const [focus, setFocus] = useState<FocusState | null>(null)
   const [align, setAlign] = useState<AlignPreference>(() => props.align())
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
   const hintTimerRef = useRef<number | null>(null)
   // Last rendered dot list, for the change-detection bail-out below.
   const lastDotsRef = useRef<TurnDot[]>([])
+  // Last focused dot key, so re-hovering the same dot after a gap re-centers it.
+  const lastFocusedKeyRef = useRef<string | null>(null)
 
   // Follow the rail anchor edge from the settings scope (a change re-anchors
   // the rail through the layout effect below).
@@ -289,6 +298,23 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     }
   }, [visible, align])
 
+  // Keep the focused dot centered in the (≤60% tall, scrollable) band so its
+  // two neighbors on each side stay visible. Re-centers only when the focused
+  // key changes; scrolls instantly to avoid chasing a fast-moving hover.
+  useLayoutEffect(() => {
+    const key = focus?.dot.key ?? null
+    if (lastFocusedKeyRef.current === key) return
+    lastFocusedKeyRef.current = key
+    if (key === null) return
+    const list = listRef.current
+    if (list === null) return
+    const target = list.querySelector<HTMLElement>('[data-question-nav-focused="true"]')
+    if (target === null) return
+    const delta = target.offsetTop - list.offsetTop
+    const center = delta - (list.clientHeight - target.offsetHeight) / 2
+    list.scrollTop = Math.max(0, Math.min(center, list.scrollHeight - list.clientHeight))
+  }, [focus])
+
   // Clear any pending hint timer on unmount.
   useEffect(() => () => {
     if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current)
@@ -303,12 +329,11 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     window.setTimeout(() => setJumpingKey((k) => (k === dot.key ? null : k)), 600)
   }
 
-  const openTooltip = (dot: TurnDot, target: HTMLElement): void => {
+  const openFocus = (dot: TurnDot, target: HTMLElement): void => {
     const r = target.getBoundingClientRect()
-    setTooltip({
-      title: dot.turn === null ? null : `Turn ${dot.turn}`,
-      lines: dot.texts,
-      // The tooltip opens away from the rail: to the right of the dot on a
+    setFocus({
+      dot,
+      // The card opens away from the rail: to the right of the dot on a
       // left-anchored rail, to the left on a right-anchored one.
       ...(align === 'right'
         ? { right: window.innerWidth - r.left + 10 }
@@ -318,6 +343,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   }
 
   const t = props.t
+  const selectedIndex = focus === null ? -1 : dots.findIndex((d) => d.key === focus.dot.key)
 
   return (
     <div
@@ -325,33 +351,77 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       className={align === 'right' ? `${styles.rail} ${styles.railRight}` : styles.rail}
       data-question-nav="rail"
     >
-      {hint !== null ? <div className={styles.hint} role="status">{hint}</div> : null}
-      <div className={styles.list}>
+      <div
+        ref={listRef}
+        className={styles.list}
+        onMouseLeave={() => setFocus(null)}
+      >
         {dots.length === 0 ? (
           <div className={styles.empty}>{t('strip.empty')}</div>
         ) : (
           <div className={styles.dots}>
             <span className={styles.count}>{dots.length}</span>
-            {dots.map((dot) => (
-              <button
-                key={dot.key}
-                className={jumpingKey === dot.key ? `${styles.dot} ${styles.active}` : styles.dot}
-                aria-label={dot.texts[0] ?? ''}
-                onMouseEnter={(e) => openTooltip(dot, e.currentTarget)}
-                onMouseLeave={() => setTooltip(null)}
-                onClick={() => onJump(dot)}
-              />
-            ))}
+            {dots.map((dot, index) => {
+              const isFocused = focus !== null && focus.dot.key === dot.key
+              // Progressive magnification: selected largest, ±1 smaller, ±2
+              // smaller still, the rest base scale.
+              const tier = selectedIndex < 0 ? null : focusTier(index - selectedIndex)
+              const scale = jumpingKey === dot.key ? 1.6 : tier !== null ? focusScale(tier) : 1
+              const cls = [styles.dot]
+              if (isFocused) cls.push(styles.focused)
+              if (jumpingKey === dot.key) cls.push(styles.active)
+              return (
+                <button
+                  key={dot.key}
+                  className={cls.join(' ')}
+                  style={{ transform: `scale(${scale})` }}
+                  data-question-nav-focused={isFocused ? 'true' : undefined}
+                  aria-label={dot.texts[0] ?? ''}
+                  onMouseEnter={(e) => openFocus(dot, e.currentTarget)}
+                  onClick={() => onJump(dot)}
+                />
+              )
+            })}
           </div>
         )}
       </div>
-      {tooltip !== null
+      {hint !== null
         ? createPortal(
-            <div className={styles.tooltip} style={{ left: tooltip.left, right: tooltip.right, top: tooltip.top }}>
-              {tooltip.title !== null ? <div className={styles.tooltipTitle}>{tooltip.title}</div> : null}
-              {tooltip.lines.map((line, index) => (
-                <div key={index} className={styles.tooltipLine}>{line}</div>
-              ))}
+            <div
+              className={styles.hint}
+              style={align === 'right' ? { right: 60, top: 20 } : { left: 60, top: 20 }}
+            >
+              {hint}
+            </div>,
+            document.body,
+          )
+        : null}
+      {focus !== null
+        ? createPortal(
+            <div className={styles.card} style={{ left: focus.left, right: focus.right, top: focus.top }}>
+              {focus.dot.turn !== null ? (
+                <div className={styles.cardTitle}>Turn {focus.dot.turn}</div>
+              ) : null}
+              <div className={styles.cardBody}>
+                {focus.dot.texts.map((line, index) => (
+                  <div key={index} className={styles.cardLine}>{line}</div>
+                ))}
+              </div>
+              <div className={styles.cardTime}>{formatQuestionTime(focus.dot.time, Date.now())}</div>
+              {/* Decorative stack: blurred cards fanning out below the card. */}
+              <div className={styles.stack} aria-hidden="true">
+                {stackLayers().map((layer, index) => (
+                  <div
+                    key={index}
+                    className={styles.stackCard}
+                    style={{
+                      transform: `translateY(${layer.dy}px) rotate(${layer.rotate}deg) scale(${layer.scale})`,
+                      filter: `blur(${layer.blur}px)`,
+                      opacity: layer.opacity,
+                    }}
+                  />
+                ))}
+              </div>
             </div>,
             document.body,
           )

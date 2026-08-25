@@ -21,8 +21,11 @@
   left: auto;
 }
 
-/* Vertically center the dot column when it is short; scroll from the top when
-   it is tall (auto margins collapse to 0 on overflow, so nothing clips). */
+/* Vertically center the dot column when it is short; when it is tall it is
+   clamped to at most 60% of the conversation height (auto margins center the
+   band) and scrolls from the top (auto margins collapse to 0 on overflow).
+   The band itself is interactive so wheel-scrolling works over the gaps too
+   (the rail above is pointer-events:none). */
 .list {
   flex: 0 1 auto;
   min-height: 0;
@@ -58,12 +61,15 @@
   cursor: pointer;
   transition: transform 120ms ease, background 120ms ease;
 }
+/* Scale is driven by the focus model through an inline transform; this only
+   colors the hovered (selected) dot instantly, before React applies it. */
 .dot:hover {
-  transform: scale(2);
+  background: var(--dsw-alias-brand-primary);
+}
+.dot.focused {
   background: var(--dsw-alias-brand-primary);
 }
 .dot.active {
-  transform: scale(1.6);
   background: var(--dsw-alias-brand-primary);
 }
 
@@ -94,38 +100,95 @@
   word-break: break-word;
 }
 
-/* Instant hover tooltip (rendered in a portal to document.body, so it is never
-   clipped by the rail's scroll container). */
-.tooltip {
+/* Transient jump-failure hint (portal-rendered near the rail top, so it never
+   pushes the centered dot band or clips in the 44px-wide rail). */
+.hint {
+  position: fixed;
+  z-index: 30;
+  max-width: 260px;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+/* Focus question card (portal-rendered beside the selected dot). Frosted /
+   virtual look: translucent fill + backdrop blur, so the conversation shows
+   through while the question stays readable. */
+.card {
   position: fixed;
   z-index: 20;
   max-width: 420px;
+  min-width: 220px;
   background: var(--dsw-alias-bg-layer-1);
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 82%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: 10px;
+  padding: 8px 12px 10px;
   font-size: 13px;
   line-height: 18px;
   color: var(--dsw-alias-label-primary);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
   white-space: normal;
   word-break: break-word;
   pointer-events: none;
 }
 
-/* Turn label line at the top of the tooltip ("Turn 32"). */
-.tooltipTitle {
+/* Turn label line at the top of the card ("Turn 32"). */
+.cardTitle {
   font-size: 11px;
   font-weight: 600;
   color: var(--dsw-alias-label-tertiary);
   margin-bottom: 4px;
 }
 
+/* Question body; long multi-question turns scroll inside the card. */
+.cardBody {
+  max-height: 96px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
 /* One question text line; consecutive lines (multi-question turns) separate. */
-.tooltipLine + .tooltipLine {
+.cardLine + .cardLine {
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* Question sent-time line (HH:MM / MM-DD HH:MM / YYYY-MM-DD HH:MM). */
+.cardTime {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Decorative stack under the selected card: a shallow deck of blurred cards
+   fanning out below the card's bottom edge (behind it via negative z-index). */
+.stack {
+  position: absolute;
+  top: 100%;
+  left: 6px;
+  right: 6px;
+  height: 0;
+  z-index: -1;
+}
+.stackCard {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
 }
 
 /* Settings page (settings.plugins.tab). */
