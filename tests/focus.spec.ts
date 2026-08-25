@@ -9,7 +9,7 @@ import {
   FOCUS_RADIUS, FOCUS_SCALES,
   canScrollAbove, canScrollBelow, clampScrollTop,
   focusCardMetrics, focusScale, focusTier, magnificationWindow,
-  minimalScrollIntoView, pageStep,
+  pageStep,
 } from '../src/core/focus.ts'
 
 describe('focusTier', () => {
@@ -107,29 +107,5 @@ describe('paging (triangle buttons)', () => {
     expect(canScrollBelow(0, 100)).toBe(true)
     expect(canScrollBelow(100, 100)).toBe(false)
     expect(canScrollBelow(0, 0)).toBe(false)
-  })
-})
-
-describe('minimalScrollIntoView', () => {
-  // Band: clientHeight 200, scrollHeight 1000, default clearance 50.
-  it('returns null when the dot is fully visible with clearance', () => {
-    expect(minimalScrollIntoView(0, 200, 1000, 60, 10)).toBeNull()
-    expect(minimalScrollIntoView(0, 200, 1000, 140, 10)).toBeNull()
-  })
-  it('scrolls up minimally when the dot is clipped at the top', () => {
-    expect(minimalScrollIntoView(100, 200, 1000, 120, 10)).toBe(70)
-    expect(minimalScrollIntoView(0, 200, 1000, 20, 10)).toBe(0)
-  })
-  it('scrolls down minimally when the dot is clipped at the bottom', () => {
-    // dot bottom 195+10=205 > viewBottom 0+200-50=150 → 205+50-200 = 55.
-    expect(minimalScrollIntoView(0, 200, 1000, 195, 10)).toBe(55)
-  })
-  it('clamps to the max scroll offset', () => {
-    expect(minimalScrollIntoView(800, 200, 1000, 990, 10)).toBe(800)
-  })
-  it('caps the margin at a quarter of the band height', () => {
-    // clientHeight 100 → margin 25 (not 50): dot at 30..40 is within 25..75.
-    expect(minimalScrollIntoView(0, 100, 1000, 30, 10)).toBeNull()
-    expect(minimalScrollIntoView(0, 100, 1000, 10, 10)).toBe(0)
   })
 })

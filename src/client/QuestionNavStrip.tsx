@@ -12,13 +12,13 @@
  * vertical cascade of question cards opens — the selected (center) card is the
  * focus (brand accent, elevated, full question text), the four neighbors are
  * narrower context cards clamped to fewer lines. Every card is clickable and
- * jumps to its question, exactly like clicking the dot; the rail scrolls the
- * selected dot into view only when it is clipped by the band's edges.
+ * jumps to its question, exactly like clicking the dot. Hovering never scrolls
+ * the band — the dot column stays put while you browse.
  *
  * Overflow is paged, not auto-scrolled: two small triangle buttons in the dot
  * style sit above and below the dot queue (▲ / ▼), each click revealing five
  * hidden dots. The native scrollbar stays hidden and the column fades at its
- * edges as a pure visual cue — no hover auto-scroll.
+ * edges as a pure visual cue — no hover auto-scroll of any kind.
  *
  * Data source: the host-folded `questionIndex` session projection (whole
  * history, persisted host-side, pushed live through session/projection
@@ -42,7 +42,7 @@ import type { QuestionEntry } from '../core/question-entry.ts'
 import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
 import type { AlignPreference } from '../core/align.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
-import { FOCUS_RADIUS, clampScrollTop, focusCardMetrics, focusScale, focusTier, minimalScrollIntoView, pageStep } from '../core/focus.ts'
+import { FOCUS_RADIUS, clampScrollTop, focusCardMetrics, focusScale, focusTier, pageStep } from '../core/focus.ts'
 import { formatQuestionTime } from '../core/time.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -154,8 +154,6 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const clearFocusTimerRef = useRef<number | null>(null)
   // Last rendered dot list, for the change-detection bail-out below.
   const lastDotsRef = useRef<TurnDot[]>([])
-  // Last focused dot key, so re-hovering the same dot after a gap re-centers it.
-  const lastFocusedKeyRef = useRef<string | null>(null)
   // Whether the dot band overflows its 60% clamp (drives the edge-fade mask
   // and the ▲/▼ paging buttons).
   const [scrollable, setScrollable] = useState(false)
@@ -356,31 +354,6 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       window.removeEventListener('resize', wake)
     }
   }, [visible, align])
-
-  // Keep the focused dot visible inside the (≤60% tall, scrollable) band:
-  // scroll only when the dot (plus room for its two magnified neighbors) is
-  // clipped by the band edges, and then only by the minimal amount — never
-  // re-center an already-visible dot, so browsing dot-by-dot doesn't shift
-  // the band under the pointer.
-  useLayoutEffect(() => {
-    const key = focus?.key ?? null
-    if (lastFocusedKeyRef.current === key) return
-    lastFocusedKeyRef.current = key
-    if (key === null) return
-    const list = listRef.current
-    if (list === null) return
-    const target = list.querySelector<HTMLElement>('[data-question-nav-focused="true"]')
-    if (target === null) return
-    const next = minimalScrollIntoView(
-      list.scrollTop,
-      list.clientHeight,
-      list.scrollHeight,
-      target.offsetTop - list.offsetTop,
-      target.offsetHeight,
-    )
-    if (next !== null) list.scrollTop = next
-    syncScroll()
-  }, [focus])
 
   // Detect band overflow: drives the edge-fade mask + the ▲/▼ paging buttons.
   // Re-checked when the dots change and whenever the band itself resizes

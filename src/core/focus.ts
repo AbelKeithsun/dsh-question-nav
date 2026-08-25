@@ -75,42 +75,11 @@ export function magnificationWindow(total: number, selected: number, radius: num
   return out
 }
 
-/** Clearance (px) kept around the focused dot when scrolling it into view, so
- *  its two magnified neighbors on each side stay inside the band's clear area
- *  (2 dot rows ≈ 28px + the 22px fade zone). */
-export const FOCUS_NEIGHBOR_CLEARANCE = 50
-
-/**
- * Minimal "scroll into view" for the focused dot, in the spirit of
- * scrollIntoView({ block: 'nearest' }): returns the scrollTop that brings the
- * dot — plus `clearance` room for its magnified neighbors — inside the
- * visible band with the smallest possible movement, or null when the dot is
- * already fully visible. Unlike unconditional centering this never shifts the
- * band while the user browses dot-by-dot: only a clipped dot is scrolled.
- */
-export function minimalScrollIntoView(
-  scrollTop: number,
-  clientHeight: number,
-  scrollHeight: number,
-  dotTop: number,
-  dotHeight: number,
-  clearance: number = FOCUS_NEIGHBOR_CLEARANCE,
-): number | null {
-  const margin = Math.min(clearance, clientHeight / 4)
-  const viewTop = scrollTop + margin
-  const viewBottom = scrollTop + clientHeight - margin
-  if (dotTop >= viewTop && dotTop + dotHeight <= viewBottom) return null
-  const next = dotTop < viewTop
-    ? dotTop - margin
-    : dotTop + dotHeight + margin - clientHeight
-  return Math.max(0, Math.min(next, Math.max(0, scrollHeight - clientHeight)))
-}
-
 /**
  * Paging model for the dot band. Overflowing dots are not auto-scrolled by
- * hovering the edges: instead the user pages them with two triangle buttons
- * (▲ above the dot queue, ▼ below it), each click revealing `DOT_PAGE_ROWS`
- * hidden dots. Pure arithmetic — no React, no DOM.
+ * hovering the edges or hovering a clipped dot: instead the user pages them
+ * with two triangle buttons (▲ above the dot queue, ▼ below it), each click
+ * revealing `DOT_PAGE_ROWS` hidden dots. Pure arithmetic — no React, no DOM.
  */
 
 /** How many hidden dots one click of a paging triangle reveals. */

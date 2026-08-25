@@ -60,7 +60,8 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
   scrollbar is hidden and two small triangle buttons in the dot style appear —
   **▲ above the dot queue and ▼ below it** — each click revealing five hidden
   dots. The column fades at its top and bottom edges as a pure visual cue
-  (wheel and trackpad still scroll too); hovering never auto-scrolls.
+  (wheel and trackpad still scroll too); **hovering never scrolls the band**,
+  so the dots stay put while you browse.
 - Empty/left areas of the rail pass pointer events through to the conversation
   (it never blocks the chat).
 
