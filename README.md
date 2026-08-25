@@ -7,9 +7,10 @@
 
 In-session question navigator for the [DeepSeek Harness (DSH) Web GUI][dsh]: a
 vertical column of small round dots overlaid on the **left edge** of the
-conversation column — one dot per user question. Hover a dot to enlarge it and
-see the question's **full text** immediately; click a dot to scroll the chat to
-that question.
+conversation column — one dot per user question. Hover a dot to magnify it
+(together with its two neighbors on each side) and reveal a frosted card with
+the question's **full text** and **sent time**; click a dot to scroll the chat
+to that question.
 
 It is an external plugin bundle with zero runtime dependencies — the browser
 half (`lib/client.js`) externalizes everything to the DSH shell, so it adds
@@ -27,7 +28,9 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
   anchor edge is configurable — **Settings → Plugins → Question Nav → Rail
   alignment** switches it between the left and right edge of the conversation
   column.
-- **Vertically centered** in the conversation column.
+- **Height-capped and scrollable**: the dot column is vertically centered and
+  uses at most **60%** of the conversation height; longer sessions scroll
+  inside that band (wheel over the dots or the gaps between them).
 - **One dot = one turn that asked a question** (strictly aligned with the
   Trajectory view's turn numbering), with a small count above the dot column.
 - **Full history, persisted, no render-window expansion**: the plugin's host
@@ -35,9 +38,13 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
   registry folds the whole event log (read-only, the chat's paged window is
   never touched), the official projection cache persists it across restarts,
   and push frames deliver new questions live.
-- **Hover**: the dot enlarges and an instant tooltip (portal-rendered, no
-  native-title delay) shows the **turn label** (`Turn N`) plus the turn's
-  **full question text** (all of them, when one turn batched several).
+- **Hover (focus)**: the dot and its **two neighbors on each side** magnify
+  progressively (selected largest), the rail auto-centers the selection, and a
+  frosted question card (portal-rendered, no native-title delay) shows the
+  **turn label** (`Turn N`), the turn's **full question text** (all of them,
+  when one turn batched several), the question's **sent time** (`HH:MM` on the
+  same day, `MM-DD HH:MM` across days, `YYYY-MM-DD HH:MM` across years) and a
+  decorative deck of blurred cards fanning out below it.
 - **Click**: jumps to that question. Only then does the jump loop page the
   window (`loadOlder()`) to bring that specific page into view — never the
   whole history up front.
