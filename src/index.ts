@@ -9,19 +9,24 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { questionIndexProjectionDefinition } from './projection.ts'
+import { questionNavSettingsNamespace, QuestionNavSettingsSchema } from './settings.ts'
 
 /** Cordis plugin name. */
 export const name = 'dsh-question-nav'
 
 /**
- * Register the `questionIndex` unit. The registry is an optional capability
- * (absent in headless compositions), so registration rides `ctx.inject`:
- * without it the host half simply contributes nothing and the browser strip
- * falls back to live-window questions.
+ * Register the `questionIndex` unit and the plugin's durable settings
+ * namespace. Both registries are optional capabilities (absent in headless
+ * compositions), so each registration rides `ctx.inject`: without them the
+ * host half simply contributes nothing and the browser strip falls back to
+ * live-window questions and the default rail alignment.
  * @param ctx - plugin context.
  */
 export function apply(ctx: Context): void {
   ctx.inject(['sessionProjections'], (inner) => {
     inner.sessionProjections.register(questionIndexProjectionDefinition)
+  })
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.settings.register(questionNavSettingsNamespace, QuestionNavSettingsSchema)
   })
 }

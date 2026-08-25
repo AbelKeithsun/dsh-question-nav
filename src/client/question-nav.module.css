@@ -15,6 +15,12 @@
   pointer-events: none;
 }
 
+/* Right-anchored rail: release the CSS `left: 0` so the inline `right`
+   (written by the layout-correction loop) owns the position. */
+.railRight {
+  left: auto;
+}
+
 /* Vertically center the dot column when it is short; scroll from the top when
    it is tall (auto margins collapse to 0 on overflow, so nothing clips). */
 .list {
@@ -117,4 +123,53 @@
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* Settings page (settings.plugins.tab). */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.settingsTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  margin: 0;
+}
+.settingsDesc {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  margin: 0;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: flex-start;
+}
+.segment {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 1;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.segment + .segment {
+  border-left: 1px solid var(--dsw-alias-border-l1);
+}
+.segment:hover {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+.segmentActive,
+.segmentActive:hover {
+  background: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-inverse);
 }

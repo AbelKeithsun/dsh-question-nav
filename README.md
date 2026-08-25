@@ -23,7 +23,10 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
 
 ## What it does
 
-- **Left-edge dot minimap** (embedded, not reserving any width).
+- **Left-edge dot minimap** (embedded, not reserving any width). The rail's
+  anchor edge is configurable — **Settings → Plugins → Question Nav → Rail
+  alignment** switches it between the left and right edge of the conversation
+  column.
 - **Vertically centered** in the conversation column.
 - **One dot = one turn that asked a question** (strictly aligned with the
   Trajectory view's turn numbering), with a small count above the dot column.

@@ -23,7 +23,13 @@ import type { SessionId } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+// Type-only: pulls the settings shell's SlotMap merge ('settings.plugins.tab')
+// and the ctx.settingsScope Context merge.
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SettingsScopeBinder } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { QuestionNavStrip, type ObservableFace, type QuestionNavInjected } from './QuestionNavStrip.tsx'
+import { QuestionNavSettingsTab } from './QuestionNavSettingsTab.tsx'
+import { QuestionNavSettingsController } from './settings.ts'
 import { en, zh, type QuestionNavKey } from './locales.ts'
 import { extractQuestions } from '../core/nodes.ts'
 import { jumpToQuestion, type JumpFailureCode, type JumpPorts } from '../core/jump.ts'
@@ -103,7 +109,7 @@ function questionProjectionOf(ctx: ClientContext, sessionId: SessionId): Observa
   }
 }
 
-function createInject(ctx: ClientContext): QuestionNavInjected {
+function createInject(ctx: ClientContext, settings: QuestionNavSettingsController): QuestionNavInjected {
   return {
     readQuestions: (sessionId) => {
       const snap = ctx.sessions.binding(sessionId)?.session.getSnapshot()
@@ -126,6 +132,9 @@ function createInject(ctx: ClientContext): QuestionNavInjected {
       }
       void jumpToQuestion(ports, key)
     },
+    align: () => settings.getSnapshot().align,
+    subscribeAlign: (cb) => settings.subscribe(cb),
+    setAlign: (align) => settings.setAlign(align),
   }
 }
 
@@ -138,8 +147,10 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => releaseApply, 'question-nav: apply claim')
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'question-nav: dictionaries')
+  const t = ctx.locale.bind(NS)
 
-  const injected = createInject(ctx)
+  const settings = new QuestionNavSettingsController()
+  const injected = createInject(ctx, settings)
 
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
@@ -148,4 +159,19 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => injected,
   }, QuestionNavStrip))
+
+  // The settings surface is optional and may apply after this plugin, so the
+  // namespace binds and the settings page mounts in a fiber that waits for
+  // it. Without it the strip simply keeps the default left alignment.
+  ctx.inject(['settingsScope'], (scopeCtx) => {
+    settings.attach(scopeCtx.get('settingsScope') as SettingsScopeBinder)
+    ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+      name: 'settings.plugins.tab',
+      id: 'question-nav',
+      order: 100,
+      label: () => t('settings.tab'),
+      locale: NS,
+      inject: () => injected,
+    }, QuestionNavSettingsTab))
+  })
 }

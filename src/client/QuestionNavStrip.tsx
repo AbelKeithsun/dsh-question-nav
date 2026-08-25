@@ -28,6 +28,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { QuestionNode } from '../core/nodes.ts'
 import type { QuestionEntry } from '../core/question-entry.ts'
 import { groupQuestionsByTurn, mergeLiveQuestions, type TurnDot } from '../core/turn-dots.ts'
+import type { AlignPreference } from '../core/align.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -52,6 +53,12 @@ export interface QuestionNavInjected {
   questionProjection: (sessionId: SessionId) => ObservableFace | undefined
   /** Jump the chat to a question row (pages the window on demand). */
   jump: (sessionId: SessionId, key: string) => void
+  /** Current rail anchor edge (defaults to 'left' before the settings section is ready). */
+  align: () => AlignPreference
+  /** Observe anchor-edge changes; returns an unsubscribe. */
+  subscribeAlign: (cb: () => void) => () => void
+  /** Persist a new anchor edge. */
+  setAlign: (align: AlignPreference) => void
 }
 
 type ComponentProps = PropsRuntime<'shell.overlay'> & QuestionNavInjected & PropsLocale<'question-nav'>
@@ -69,7 +76,9 @@ interface TooltipState {
   title: string | null
   /** Question text lines (one per question folded into the dot). */
   lines: readonly string[]
-  left: number
+  /** Horizontal anchor — left edge (left-aligned rail) or right edge (right-aligned). */
+  left?: number
+  right?: number
   top: number
 }
 
@@ -113,10 +122,15 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const [jumpingKey, setJumpingKey] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
+  const [align, setAlign] = useState<AlignPreference>(() => props.align())
   const panelRef = useRef<HTMLDivElement | null>(null)
   const hintTimerRef = useRef<number | null>(null)
   // Last rendered dot list, for the change-detection bail-out below.
   const lastDotsRef = useRef<TurnDot[]>([])
+
+  // Follow the rail anchor edge from the settings scope (a change re-anchors
+  // the rail through the layout effect below).
+  useEffect(() => props.subscribeAlign(() => setAlign(props.align())), [props])
 
   const showHint = (message: string): void => {
     setHint(message)
@@ -217,13 +231,29 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       if (convRect.height <= 0 || convRect.width <= 0) return true
       const top = `${convRect.top - frameRect.top}px`
       const height = `${convRect.height}px`
+      // Anchor to the configured edge: keep the other edge's inline style
+      // cleared so the CSS class (left: auto on .railRight) owns it.
+      if (align === 'right') {
+        const right = `${frameRect.right - convRect.right}px`
+        if (panel.style.top === top && panel.style.height === height
+          && panel.style.right === right && panel.style.left === '') {
+          return false
+        }
+        panel.style.top = top
+        panel.style.height = height
+        panel.style.right = right
+        panel.style.left = ''
+        return true
+      }
       const left = `${convRect.left - frameRect.left}px`
-      if (panel.style.top === top && panel.style.height === height && panel.style.left === left) {
+      if (panel.style.top === top && panel.style.height === height
+        && panel.style.left === left && panel.style.right === '') {
         return false
       }
       panel.style.top = top
       panel.style.height = height
       panel.style.left = left
+      panel.style.right = ''
       return true
     }
 
@@ -257,7 +287,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       observer?.disconnect()
       window.removeEventListener('resize', wake)
     }
-  }, [visible])
+  }, [visible, align])
 
   // Clear any pending hint timer on unmount.
   useEffect(() => () => {
@@ -278,7 +308,11 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     setTooltip({
       title: dot.turn === null ? null : `Turn ${dot.turn}`,
       lines: dot.texts,
-      left: r.right + 10,
+      // The tooltip opens away from the rail: to the right of the dot on a
+      // left-anchored rail, to the left on a right-anchored one.
+      ...(align === 'right'
+        ? { right: window.innerWidth - r.left + 10 }
+        : { left: r.right + 10 }),
       top: r.top,
     })
   }
@@ -286,7 +320,11 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const t = props.t
 
   return (
-    <div ref={panelRef} className={styles.rail} data-question-nav="rail">
+    <div
+      ref={panelRef}
+      className={align === 'right' ? `${styles.rail} ${styles.railRight}` : styles.rail}
+      data-question-nav="rail"
+    >
       {hint !== null ? <div className={styles.hint} role="status">{hint}</div> : null}
       <div className={styles.list}>
         {dots.length === 0 ? (
@@ -309,7 +347,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       </div>
       {tooltip !== null
         ? createPortal(
-            <div className={styles.tooltip} style={{ left: tooltip.left, top: tooltip.top }}>
+            <div className={styles.tooltip} style={{ left: tooltip.left, right: tooltip.right, top: tooltip.top }}>
               {tooltip.title !== null ? <div className={styles.tooltipTitle}>{tooltip.title}</div> : null}
               {tooltip.lines.map((line, index) => (
                 <div key={index} className={styles.tooltipLine}>{line}</div>
