@@ -1,5 +1,10 @@
 # dsh-question-nav
 
+<p align="center">
+  <a href="https://github.com/AbelKeithsun/dsh-question-nav/blob/main/README.md">English</a> |
+  <a href="https://github.com/AbelKeithsun/dsh-question-nav/blob/main/README.zh.md">简体中文</a>
+</p>
+
 In-session question navigator for the [DeepSeek Harness (DSH) Web GUI][dsh]: a
 vertical column of small round dots overlaid on the **left edge** of the
 conversation column — one dot per user question. Hover a dot to enlarge it and

@@ -1,5 +1,10 @@
 # dsh-question-nav
 
+<p align="center">
+  <a href="https://github.com/AbelKeithsun/dsh-question-nav/blob/main/README.md">English</a> |
+  <a href="https://github.com/AbelKeithsun/dsh-question-nav/blob/main/README.zh.md">简体中文</a>
+</p>
+
 [DeepSeek Harness (DSH) Web GUI][dsh] 的**会话内提问导航**插件：在对话栏**左侧**
 内嵌一列竖排的圆点小按钮 —— 每个圆点对应一个用户提问。鼠标悬停圆点会放大
 并**立即**显示该提问的**全文**；点击圆点则把对话滚动跳到那一提问的位置。
