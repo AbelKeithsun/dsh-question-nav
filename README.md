@@ -19,7 +19,7 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
 
 ## Preview
 
-![Left-edge dot minimap with a hover tooltip showing the turn label and full question text](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/question-nav-preview.jpg)
+![Full DSH Web GUI screenshot with the question-nav dot rail embedded on the left edge of the conversation column](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/question-nav-preview.jpg)
 
 ## What it does
 

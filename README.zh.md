@@ -16,7 +16,7 @@
 
 ## 效果展示
 
-![左缘圆点迷你地图：竖排圆点，每个圆点对应一个用户提问，悬停显示 Turn 编号与全文](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/question-nav-preview.jpg)
+![DSH Web GUI 完整截图：对话栏左侧内嵌提问导航圆点列，每个圆点对应一个用户提问](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/question-nav-preview.jpg)
 
 ## 功能
 
