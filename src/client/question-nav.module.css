@@ -22,11 +22,10 @@
 }
 
 /* The paging queue: the fixed column (count + ▲, then the scrollable dot band,
-   then ▼) that replaces the edge-fade auto-scroll. Clamped to 60% of the
-   conversation height and vertically centered (auto margins); when the queue
-   overflows, only the middle dot band scrolls — the count and triangles stay
-   pinned. The wrapper stays pass-through; the band and triangles re-enable
-   pointer events. */
+   then ▼). Clamped to 60% of the conversation height and vertically centered
+   (auto margins); when the queue overflows, only the middle dot band scrolls
+   — the count and triangles stay pinned. The wrapper stays pass-through; the
+   band and triangles re-enable pointer events. */
 .queue {
   flex: 0 1 auto;
   min-height: 0;
@@ -44,7 +43,8 @@
 /* The middle dot band: the only scrollable part of the queue. Scrolls from the
    top (overflow collapses the auto margins to 0). The native scrollbar is
    always hidden: this is a minimap paged by the ▲/▼ buttons and by
-   wheel/trackpad, and overflow is signalled by the edge fade below. */
+   wheel/trackpad, and overflow is signalled by the ▲/▼ triangles themselves
+   (each appears only while its direction has more dots to reveal). */
 .list {
   flex: 1 1 auto;
   min-height: 0;
@@ -63,13 +63,6 @@
   width: 0;
   height: 0;
   display: none;
-}
-/* Overflowing band (applied from JS when scrollHeight > clientHeight): dots
-   fade out towards both edges — a pure visual cue for "more beyond" (the
-   paging triangles do the actual scrolling). */
-.listScrollable {
-  -webkit-mask-image: linear-gradient(to bottom, transparent, black 22px, black calc(100% - 22px), transparent);
-  mask-image: linear-gradient(to bottom, transparent, black 22px, black calc(100% - 22px), transparent);
 }
 
 .dot {
@@ -213,7 +206,7 @@
   position: fixed;
   z-index: 30;
   max-width: 260px;
-  background: var(--dsw-alias-bg-layer-2);
+  background: var(--dsw-alias-bg-layer-3);
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 6px;
   padding: 6px 10px;
@@ -240,11 +233,14 @@
 /* One focus question card (portal-rendered in the cascade). The four context
    cards use the base style: a clean solid surface, a quiet neutral border and
    a low shadow — crisp and readable, one visual step behind the focus card.
-   Clicking jumps to the question, like the dot; hover raises the border to
-   signal the card is interactive. */
+   The surface is the theme's TOP elevation layer (bg-layer-3, the same token
+   DSH menus and popups use): these cards float above the conversation, and in
+   dark themes the layer ramp gives them the raised-surface tint. Clicking
+   jumps to the question, like the dot; hover raises the border to signal the
+   card is interactive. */
 .card {
   width: 380px;
-  background: var(--dsw-alias-bg-layer-1);
+  background: var(--dsw-alias-bg-layer-3);
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
   padding: 8px 12px 10px;
