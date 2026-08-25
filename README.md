@@ -21,7 +21,11 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
 
 ## Preview
 
-![Full DSH Web GUI screenshot with the question-nav dot rail embedded on the left edge of the conversation column](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/question-nav-preview.jpg)
+![Full DSH Web GUI screenshot with the question-nav dot rail embedded on the left edge of the conversation column](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/0.7.4%E6%95%88%E6%9E%9C%E9%A2%84%E8%A7%88.jpg)
+
+Plugin settings (rail alignment + dots per page):
+
+![The plugin's settings page: rail alignment and dots-per-page segmented controls](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/%E6%8F%92%E4%BB%B6%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0%E8%AE%BE%E7%BD%AE.jpg)
 
 ## What it does
 
