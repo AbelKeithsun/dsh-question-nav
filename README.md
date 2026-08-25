@@ -8,9 +8,10 @@
 In-session question navigator for the [DeepSeek Harness (DSH) Web GUI][dsh]: a
 vertical column of small round dots overlaid on the **left edge** of the
 conversation column — one dot per user question. Hover a dot to magnify it
-(together with its two neighbors on each side) and reveal a frosted card with
-the question's **full text** and **sent time**; click a dot to scroll the chat
-to that question.
+(together with its two neighbors on each side) and reveal a vertical cascade
+of crisp question cards with each question's **full text** and **sent time**
+(clicking any card jumps to it); click a dot to scroll the chat to that
+question.
 
 It is an external plugin bundle with zero runtime dependencies — the browser
 half (`lib/client.js`) externalizes everything to the DSH shell, so it adds
@@ -40,11 +41,15 @@ Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
   and push frames deliver new questions live.
 - **Hover (focus)**: the dot and its **two neighbors on each side** magnify
   progressively (selected largest), the rail auto-centers the selection, and a
-  frosted question card (portal-rendered, no native-title delay) shows the
-  **turn label** (`Turn N`), the turn's **full question text** (all of them,
-  when one turn batched several), the question's **sent time** (`HH:MM` on the
-  same day, `MM-DD HH:MM` across days, `YYYY-MM-DD HH:MM` across years) and a
-  decorative deck of blurred cards fanning out below it.
+  **vertical cascade of five crisp question cards** (portal-rendered, no
+  native-title delay) appears beside the rail — one card per window dot,
+  stacked top-to-bottom without overlap and centered on the selected dot. Each
+  card shows the turn's **full question text** (all of them, when one turn
+  batched several) and the question's **sent time** (`HH:MM` on the same day,
+  `MM-DD HH:MM` across days, `YYYY-MM-DD HH:MM` across years). The **center
+  card is the brightest** and marked with a brand edge; cards further from it
+  are slightly narrower, dimmer and show fewer lines. **Clicking any card
+  jumps to that question** exactly like clicking its dot.
 - **Click**: jumps to that question. Only then does the jump loop page the
   window (`loadOlder()`) to bring that specific page into view — never the
   whole history up front.
