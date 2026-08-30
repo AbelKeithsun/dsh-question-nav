@@ -88,6 +88,16 @@
 .dot.active {
   background: var(--dsw-alias-brand-primary);
 }
+/* Scroll-spy marker: the turn at the reader's position. Brand fill plus an
+   offset ring so it stays recognizable next to plain dots and composes with
+   the hover/focus/jump fill states (those recolor the interior; the ring
+   persists). Outline never affects layout, and the gap stays transparent so
+   no backdrop color has to be punched out. */
+.dot.current {
+  background: var(--dsw-alias-brand-primary);
+  outline: 1.5px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2.5px;
+}
 
 /* Click-paging feedback: dots revealed by a ▲/▼ click pop in with a staggered
    fade + rise/drop (per-dot animation-delay is set inline, stagger order *

@@ -23,6 +23,11 @@
  * appears only while its direction has more to reveal) — no hover auto-scroll
  * of any kind.
  *
+ * A scroll-spy marks the reader's position: the dot of the turn at the
+ * reading line (35% down the scrollport) carries a ring marker that follows
+ * the conversation as it scrolls, streams, or pages its window. The marker
+ * never scrolls the band — it is purely a position indicator.
+ *
  * Data source: the host-folded `questionIndex` session projection (whole
  * history, persisted host-side, pushed live through session/projection
  * frames) read through the injected `questionProjection` face, plus the live
@@ -47,6 +52,7 @@ import type { AlignPreference } from '../core/align.ts'
 import type { PageSize } from '../core/page-size.ts'
 import type { JumpFailureCode } from '../core/jump.ts'
 import { DOT_GAP, DOT_SIZE, FOCUS_RADIUS, clampScrollTop, focusCardMetrics, focusScale, focusTier, pageStep } from '../core/focus.ts'
+import { pickActiveDot, readingLineOffset, type ActiveDotRow } from '../core/active-dot.ts'
 import { formatQuestionTime } from '../core/time.ts'
 import type { QuestionNavKey } from './locales.ts'
 import styles from './question-nav.module.css'
@@ -153,6 +159,8 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
   const [jumpingKey, setJumpingKey] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
   const [focus, setFocus] = useState<FocusState | null>(null)
+  // Scroll-spy: the dot marking the reader's current turn (null outside chat).
+  const [currentKey, setCurrentKey] = useState<string | null>(null)
   const [align, setAlign] = useState<AlignPreference>(() => props.align())
   // Dots revealed per ▲/▼ click (settings scope; drives pageBy's step).
   const [pageSize, setPageSize] = useState<PageSize>(() => props.pageSize())
@@ -430,6 +438,80 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
     return () => observer.disconnect()
   }, [dots, align])
 
+  // Scroll-spy: mark the dot whose turn sits at the reader's position and
+  // follow the conversation as it scrolls. The reading line is 35% down the
+  // scrollport (see core/active-dot.ts), so the marker reads as "the question
+  // I am looking at". Only rendered rows participate: a paged-out window
+  // unmounts older questions, and the marker tracks what is on screen.
+  useEffect(() => {
+    if (!visible || dots.length === 0) {
+      setCurrentKey(null)
+      return
+    }
+    let raf = 0
+    let disposed = false
+    let observedFlow: Element | null = null
+
+    const compute = (): void => {
+      raf = 0
+      const scrollport = document.querySelector<HTMLElement>('[data-conversation-scroll]')
+      const flow = document.querySelector<HTMLElement>('[data-chat-flow]')
+      // Trajectory view / chat not mounted: no marker.
+      if (scrollport === null || flow === null) {
+        setCurrentKey(null)
+        return
+      }
+      // Content growth (streaming, paging) shifts row tops without a scroll
+      // event; re-observe the flow element across remounts.
+      if (observer !== null && observedFlow !== flow) {
+        observer.disconnect()
+        observer.observe(flow)
+        observedFlow = flow
+      }
+      const portRect = scrollport.getBoundingClientRect()
+      if (portRect.height <= 0) return
+      // Key lookup without interpolating a selector (chat keys contain ':').
+      const rendered = new Map<string, HTMLElement>()
+      for (const row of flow.querySelectorAll<HTMLElement>('[data-chat-anchor-key]')) {
+        const key = row.dataset.chatAnchorKey
+        if (key !== undefined && !rendered.has(key)) rendered.set(key, row)
+      }
+      const rows: ActiveDotRow[] = []
+      for (const dot of dots) {
+        // The turn's first rendered question row anchors the dot (memberKeys
+        // are in seq order, so the first hit is the turn's topmost row).
+        for (const memberKey of dot.memberKeys) {
+          const row = rendered.get(memberKey)
+          if (row !== undefined) {
+            rows.push({ key: dot.key, top: row.getBoundingClientRect().top - portRect.top })
+            break
+          }
+        }
+      }
+      const next = pickActiveDot(rows, readingLineOffset(portRect.height))
+      setCurrentKey((prev) => (prev === next ? prev : next))
+    }
+    const schedule = (): void => {
+      if (!disposed && raf === 0) raf = requestAnimationFrame(compute)
+    }
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+
+    compute()
+    // Scroll events do not bubble; capturing at the document reaches the
+    // conversation scrollport today and after any remount without tracking
+    // the node. rAF-throttled, so hot scroll streams coalesce into one
+    // measurement per frame.
+    document.addEventListener('scroll', schedule, true)
+    window.addEventListener('resize', schedule)
+    return () => {
+      disposed = true
+      if (raf !== 0) cancelAnimationFrame(raf)
+      observer?.disconnect()
+      document.removeEventListener('scroll', schedule, true)
+      window.removeEventListener('resize', schedule)
+    }
+  }, [visible, dots])
+
   // Clear any pending timers on unmount.
   useEffect(() => () => {
     if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current)
@@ -512,6 +594,7 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
                   const cls = [styles.dot]
                   if (isFocused) cls.push(styles.focused)
                   if (jumpingKey === dot.key) cls.push(styles.active)
+                  if (currentKey === dot.key) cls.push(styles.current)
                   if (reveal !== undefined) {
                     cls.push(reveal.dir === 1 ? styles.dotEnterFromBottom : styles.dotEnterFromTop)
                   }
