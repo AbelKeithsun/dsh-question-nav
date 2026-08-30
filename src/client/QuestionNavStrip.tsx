@@ -351,7 +351,14 @@ export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | nul
       // Anchor to the configured edge: keep the other edge's inline style
       // cleared so the CSS class (left: auto on .railRight) owns it.
       if (align === 'right') {
-        const right = `${frameRect.right - convRect.right}px`
+        // Give back the conversation scrollbar's layout width so the 44px
+        // rail never covers the bar: the WebKit path consumes 8px at the
+        // column's right edge, which the rail would otherwise render on top
+        // of, making the bar unclickable. ui-theme mirrors that width as
+        // --dsh-scrollbar-width (the overlay composer seat offsets `right`
+        // by the same variable); 8px fallback covers engines where the
+        // variable is absent.
+        const right = `calc(${frameRect.right - convRect.right}px + var(--dsh-scrollbar-width, 8px))`
         if (panel.style.top === top && panel.style.height === height
           && panel.style.right === right && panel.style.left === '') {
           return false
