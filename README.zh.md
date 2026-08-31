@@ -16,6 +16,20 @@
 
 包名：**`@luziyang2026/dsh-question-nav`**（[npm][npm] · [GitHub][github]）。
 
+> **适配 Alpha 版本（0.8.0-alpha.0）。** 本版本将插件适配到 **DSH `0.1.2-alpha.2` SDK 线**
+> —— 即 DeepSeek Harness Web GUI 当前的 Alpha 构建。实时对话窗口改为通过 0.1.2 的
+> conversation 服务读取（`ctx.uiConversation.binding(id).target('chat')`），取代被移除的
+> `session.getSnapshot().chat`；settings 类型、会话投影单元与 sessions 选择器均按新 API
+> 形态更新，`@deepseek-ai/*` devDeps 从 `0.1.1-rc.1` 升到 `0.1.2-alpha.2`。当 conversation
+> 服务不可用（headless / 边缘组合）时，导航条自动降级为仅投影圆点。此前的全部交互
+> —— 悬停聚焦 + 卡片级联、分页、scroll-spy 位置标记、右对齐导航条 —— 均保持不变。
+>
+> 若你的 GUI 运行在 Alpha 构建上，用 `alpha` dist-tag 安装：
+
+```sh
+dsh plugin --profile web add @luziyang2026/dsh-question-nav@alpha
+```
+
 ## 效果展示
 
 ![DSH Web GUI 完整截图：对话栏左侧内嵌提问导航圆点列，每个圆点对应一个用户提问](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/0.7.4%E6%95%88%E6%9E%9C%E9%A2%84%E8%A7%88.jpg)

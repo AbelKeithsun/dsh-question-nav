@@ -19,6 +19,24 @@ only a small bundle to the GUI at load time.
 
 Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
 
+> **Alpha-adapted build (0.8.0-alpha.0).** This release adapts the plugin to the
+> **DSH `0.1.2-alpha.2` SDK line** — the current Alpha build of the DeepSeek
+> Harness web GUI. The live chat window is now read through the 0.1.2
+> conversation service (`ctx.uiConversation.binding(id).target('chat')`),
+> replacing the removed `session.getSnapshot().chat`; settings types, the
+> session-projection unit, and the sessions selector were updated to the new
+> API shapes, and the `@deepseek-ai/*` devDeps moved from `0.1.1-rc.1` to
+> `0.1.2-alpha.2`. When the conversation service is absent (headless/edge
+> compositions) the strip degrades to projection-only dots. All earlier
+> interactions — hover focus + cascade, paging, scroll-spy marker,
+> right-aligned rail — are unchanged.
+>
+> Install it with the `alpha` dist-tag when your GUI runs the Alpha build:
+
+```sh
+dsh plugin --profile web add @luziyang2026/dsh-question-nav@alpha
+```
+
 ## Preview
 
 ![Full DSH Web GUI screenshot with the question-nav dot rail embedded on the left edge of the conversation column](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/0.7.4%E6%95%88%E6%9E%9C%E9%A2%84%E8%A7%88.jpg)
