@@ -150,9 +150,29 @@ function sameDots(a: readonly TurnDot[], b: readonly TurnDot[]): boolean {
   return true
 }
 
+/** Minimal structural shape of a session-list row (SDK-decoupled). */
+interface SessionSummaryLike {
+  blank?: boolean
+}
+
+/**
+ * Minimal session-list snapshot the `useSessions` selector reads. Kept
+ * structural because the SDK snapshot type can collapse to `any` under an
+ * isolated plugin build (skipLibCheck), which would otherwise make the
+ * selector parameters implicitly `any`.
+ */
+interface SessionListLike {
+  current?: SessionId
+  byId: Record<SessionId, SessionSummaryLike>
+}
+
+/** The session-list selector hook, typed structurally. */
+type UseSessionsLike = <R>(selector: (snapshot: SessionListLike) => R) => R
+
 export function QuestionNavStrip(props: ComponentProps): React.JSX.Element | null {
-  const current = props.useSessions((s) => s.current)
-  const summary = props.useSessions((s) => (s.current === undefined ? undefined : s.byId[s.current]))
+  const useSessions = props.useSessions as UseSessionsLike
+  const current = useSessions((s) => s.current)
+  const summary = useSessions((s) => (s.current === undefined ? undefined : s.byId[s.current]))
   const visible = current !== undefined && summary !== undefined && summary.blank !== true
 
   const [dots, setDots] = useState<TurnDot[]>([])

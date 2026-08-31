@@ -5,7 +5,7 @@
  * document.
  */
 import { describe, expect, it } from 'vitest'
-import type { SettingsScopeSnapshot, SettingsScopeSpec } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SettingsScopeSnapshot, SettingsScopeSpec } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { QuestionNavSettingsController, type SettingsScopeBinderLike } from '../src/client/settings.ts'
 import {
   ALIGN_FIELD, ALIGN_OPTIONS, DEFAULT_ALIGN, QUESTION_NAV_SETTINGS_NS,
@@ -45,6 +45,7 @@ function makeBinder(scope: FakeScope): SettingsScopeBinderLike {
         return Promise.resolve()
       },
       unset: () => Promise.resolve(),
+      mutate: () => Promise.resolve(),
     }),
   }
 }

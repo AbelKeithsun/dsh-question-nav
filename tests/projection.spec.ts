@@ -34,14 +34,15 @@ function question(seq: number, id: string, text: string, over: {
 }
 
 function fold(events: readonly SessionEvent[]): QuestionIndexState {
-  let state: QuestionIndexState = unit.init()
+  // `init` takes the immutable SessionHeader in 0.1.2; the unit ignores it.
+  let state: QuestionIndexState = unit.init({} as Parameters<typeof unit.init>[0])
   for (const event of events) state = unit.apply(state, event)
   return state
 }
 
 describe('questionIndex projection fold', () => {
   it('init produces an empty index at turn 0', () => {
-    expect(unit.init()).toEqual({ turn: 0, questions: [] })
+    expect(unit.init({} as Parameters<typeof unit.init>[0])).toEqual({ turn: 0, questions: [] })
   })
 
   it('records an append-origin user question with its turn', () => {

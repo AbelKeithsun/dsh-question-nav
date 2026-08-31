@@ -17,8 +17,12 @@
  * Failure policy: nothing here throws at apply time — an external plugin must
  * never take the GUI down.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-client-connection/client'
+// Type-only: pulls the sessions service merge (ctx.sessions).
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+// Type-only: pulls the slots service merge (ctx.slots).
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls ui-layout's SlotMap merge ('shell.overlay').
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -27,6 +31,12 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // and the ctx.settingsScope Context merge.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SettingsScopeBinder } from '@deepseek-ai/dsh-client-ui-settings/client'
+// Type-only: pulls the session standard props (props.useSessions).
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+// Type-only: pulls the conversation service (ctx.uiConversation) whose 'chat'
+// target carries the live chat window this plugin reads in 0.1.2 — the
+// replacement for the removed `session.getSnapshot().chat` of 0.1.1-rc.1.
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { QuestionNavStrip, type ObservableFace, type QuestionNavInjected } from './QuestionNavStrip.tsx'
 import { QuestionNavSettingsTab } from './QuestionNavSettingsTab.tsx'
 import { QuestionNavSettingsController } from './settings.ts'
@@ -45,7 +55,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services required by this plugin. */
-export const inject = ['slots', 'locale', 'sessions']
+export const inject = ['slots', 'locale', 'sessions', 'uiConversation']
 
 /** Single-instance guard: a duplicated client injection must not mount twice. */
 declare global {
@@ -63,6 +73,39 @@ function releaseApply(): void {
   globalThis.__dshQuestionNavApplied = undefined
 }
 
+/** Minimal shape of a live chat window node (structural, not SDK-bound). */
+interface ChatNodeLike {
+  key: string
+  anchorSeq: number
+  visibility?: string
+  kind?: string
+  data?: unknown
+}
+
+/** The conversation service's 'chat' target — ObservableSnapshot<ChatSnapshot>. */
+interface ChatSourceLike {
+  getSnapshot(): { nodes: { values(): Iterable<ChatNodeLike> } } | undefined
+  subscribe(listener: () => void): () => void
+}
+
+/**
+ * The live chat-window snapshot for a session, resolved through the 0.1.2
+ * conversation service (`ctx.uiConversation.binding(id).target('chat')`) — the
+ * replacement for the removed `session.getSnapshot().chat` of 0.1.1-rc.1.
+ * Undefined when the session is not bound or the conversation service is
+ * absent (headless/edge) — the strip then shows projection dots only.
+ */
+function chatSourceOf(ctx: ClientContext, sessionId: SessionId): ChatSourceLike | undefined {
+  if (ctx.sessions.binding(sessionId) === undefined) return undefined
+  const uiConversation = (ctx as { uiConversation?: { binding(id: SessionId): { target(key: string): unknown } } }).uiConversation
+  if (uiConversation === undefined) return undefined
+  try {
+    return uiConversation.binding(sessionId).target('chat') as ChatSourceLike
+  } catch {
+    return undefined
+  }
+}
+
 /** Map the session snapshot to the jump-loop port surface. */
 function jumpPortsFor(ctx: ClientContext, sessionId: SessionId): JumpPorts {
   return {
@@ -74,7 +117,7 @@ function jumpPortsFor(ctx: ClientContext, sessionId: SessionId): JumpPorts {
         openState: snap.openState,
         hasMore: snap.hasMore,
         loadingOlder: snap.loadingOlder,
-        rows: snap.chat.nodes.values(),
+        rows: chatSourceOf(ctx, sessionId)?.getSnapshot()?.nodes.values() ?? [],
       }
     },
     loadOlder: async () => {
@@ -112,12 +155,16 @@ function questionProjectionOf(ctx: ClientContext, sessionId: SessionId): Observa
 function createInject(ctx: ClientContext, settings: QuestionNavSettingsController): QuestionNavInjected {
   return {
     readQuestions: (sessionId) => {
-      const snap = ctx.sessions.binding(sessionId)?.session.getSnapshot()
-      if (snap === undefined) return []
-      return extractQuestions(snap.chat.nodes.values())
+      const source = chatSourceOf(ctx, sessionId)
+      const nodes = source?.getSnapshot()?.nodes.values() ?? []
+      return extractQuestions(nodes)
     },
     subscribeList: (cb) => ctx.sessions.list.subscribe(cb),
     subscribeContent: (sessionId, cb) => {
+      // The live chat window is the 0.1.2 content feed; fall back to the
+      // session stream when the conversation target is not available.
+      const source = chatSourceOf(ctx, sessionId)
+      if (source !== undefined) return source.subscribe(cb)
       const binding = ctx.sessions.binding(sessionId)
       if (binding === undefined) return () => {}
       return binding.session.subscribe(cb)
