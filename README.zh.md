@@ -18,11 +18,11 @@
 
 ## 效果展示
 
-![DSH Web GUI 完整截图：对话栏左侧内嵌提问导航圆点列，每个圆点对应一个用户提问](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/0.7.4%E6%95%88%E6%9E%9C%E9%A2%84%E8%A7%88.jpg)
+![DSH Web GUI 完整截图：对话栏左侧内嵌提问导航圆点列，每个圆点对应一个用户提问](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/assets/screenshots/01-main.png)
 
 插件设置页（导航条对齐 + 每次翻出数量）：
 
-![插件设置页截图：导航条对齐与每次翻出数量两组分段选项](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/%E6%8F%92%E4%BB%B6%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0%E8%AE%BE%E7%BD%AE.jpg)
+![插件设置页截图：导航条对齐与每次翻出数量两组分段选项](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/assets/screenshots/02-settings.png)
 
 ## 功能
 
