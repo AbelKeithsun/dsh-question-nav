@@ -16,27 +16,13 @@
 
 包名：**`@luziyang2026/dsh-question-nav`**（[npm][npm] · [GitHub][github]）。
 
-> **适配 Alpha 版本（0.8.0-alpha.0）。** 本版本将插件适配到 **DSH `0.1.2-alpha.2` SDK 线**
-> —— 即 DeepSeek Harness Web GUI 当前的 Alpha 构建。实时对话窗口改为通过 0.1.2 的
-> conversation 服务读取（`ctx.uiConversation.binding(id).target('chat')`），取代被移除的
-> `session.getSnapshot().chat`；settings 类型、会话投影单元与 sessions 选择器均按新 API
-> 形态更新，`@deepseek-ai/*` devDeps 从 `0.1.1-rc.1` 升到 `0.1.2-alpha.2`。当 conversation
-> 服务不可用（headless / 边缘组合）时，导航条自动降级为仅投影圆点。此前的全部交互
-> —— 悬停聚焦 + 卡片级联、分页、scroll-spy 位置标记、右对齐导航条 —— 均保持不变。
->
-> 若你的 GUI 运行在 Alpha 构建上，用 `alpha` dist-tag 安装：
-
-```sh
-dsh plugin --profile web add @luziyang2026/dsh-question-nav@alpha
-```
-
 ## 效果展示
 
-![DSH Web GUI 完整截图：对话栏左侧内嵌提问导航圆点列，每个圆点对应一个用户提问](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/0.7.4%E6%95%88%E6%9E%9C%E9%A2%84%E8%A7%88.jpg)
+![DSH Web GUI 完整截图：对话栏左侧内嵌提问导航圆点列，每个圆点对应一个用户提问](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/assets/screenshots/01-main.png)
 
 插件设置页（导航条对齐 + 每次翻出数量）：
 
-![插件设置页截图：导航条对齐与每次翻出数量两组分段选项](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/%E6%8F%92%E4%BB%B6%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0%E8%AE%BE%E7%BD%AE.jpg)
+![插件设置页截图：导航条对齐与每次翻出数量两组分段选项](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/assets/screenshots/02-settings.png)
 
 ## 功能
 
@@ -77,12 +63,44 @@ dsh plugin --profile web add @luziyang2026/dsh-question-nav@alpha
 - DeepSeek Harness Web GUI（可运行的 DSH profile；需要 `dsh` CLI）。
 - Node.js `>= 20`（与 DSH SDK peer 范围一致）。
 
+## 选择哪个版本
+
+同一个包名下发布**两条版本线**，请按你 GUI 所运行的 DSH 构建选择：
+
+| npm dist-tag | 版本 | 适配的 DSH | 状态 |
+|---|---|---|---|
+| `latest` | `0.7.x` | `0.1.1-rc.1` SDK 线 | **稳定版** —— 日常使用推荐 |
+| `alpha` | `0.8.0-alpha.x` | `0.1.2-alpha.2` SDK 线 | **Alpha 版** —— 适配 Alpha GUI |
+
+- **绝大多数用户装 `latest`（稳定版）**：跟随 DSH 稳定版发布线，日常使用安全。
+- **你的 GUI 是 DSH Alpha 版（`0.1.2-alpha.2`）？** 请改用 `alpha` dist-tag。
+  稳定版读取的是 `session.getSnapshot().chat` 这个 chat 快照 API，它在 Alpha SDK
+  中**已被移除**；`alpha` 版改为通过新的 conversation 服务读取实时对话。若在 Alpha
+  GUI 上装稳定版，导航条会降级（只剩投影圆点）。
+- **不确定自己是什么 DSH 构建？** 在 GUI 里或 `dsh --version` 看版本号：`0.1.1-rc.x`
+  用 `latest`；`0.1.2-alpha.x` 用 `alpha`。
+
 ## 安装
 
-从 npm 装预构建包并加进 profile：
+从 npm 装预构建包并加进 profile。**请使用与你的 DSH 构建匹配的 dist-tag**（见上）：
+
+**稳定版（DSH `0.1.1-rc.1`，大多数用户）：**
 
 ```sh
-dsh plugin --profile web add @luziyang2026/dsh-question-nav
+dsh plugin --profile web add @luziyang2026/dsh-question-nav        # latest → 0.7.x
+```
+
+**Alpha 版（DSH `0.1.2-alpha.2` GUI）：**
+
+```sh
+dsh plugin --profile web add @luziyang2026/dsh-question-nav@alpha  # alpha → 0.8.0-alpha.x
+```
+
+如需锁定具体版本，可显式指定：
+
+```sh
+dsh plugin --profile web add @luziyang2026/dsh-question-nav@0.7.7        # 稳定版锁版
+dsh plugin --profile web add @luziyang2026/dsh-question-nav@0.8.0-alpha.0 # Alpha 锁版
 ```
 
 然后重启 DSH Web GUI 以加载新 bundle。

@@ -19,31 +19,13 @@ only a small bundle to the GUI at load time.
 
 Package: **`@luziyang2026/dsh-question-nav`** ([npm][npm] · [GitHub][github]).
 
-> **Alpha-adapted build (0.8.0-alpha.0).** This release adapts the plugin to the
-> **DSH `0.1.2-alpha.2` SDK line** — the current Alpha build of the DeepSeek
-> Harness web GUI. The live chat window is now read through the 0.1.2
-> conversation service (`ctx.uiConversation.binding(id).target('chat')`),
-> replacing the removed `session.getSnapshot().chat`; settings types, the
-> session-projection unit, and the sessions selector were updated to the new
-> API shapes, and the `@deepseek-ai/*` devDeps moved from `0.1.1-rc.1` to
-> `0.1.2-alpha.2`. When the conversation service is absent (headless/edge
-> compositions) the strip degrades to projection-only dots. All earlier
-> interactions — hover focus + cascade, paging, scroll-spy marker,
-> right-aligned rail — are unchanged.
->
-> Install it with the `alpha` dist-tag when your GUI runs the Alpha build:
-
-```sh
-dsh plugin --profile web add @luziyang2026/dsh-question-nav@alpha
-```
-
 ## Preview
 
-![Full DSH Web GUI screenshot with the question-nav dot rail embedded on the left edge of the conversation column](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/0.7.4%E6%95%88%E6%9E%9C%E9%A2%84%E8%A7%88.jpg)
+![Full DSH Web GUI screenshot with the question-nav dot rail embedded on the left edge of the conversation column](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/assets/screenshots/01-main.png)
 
 Plugin settings (rail alignment + dots per page):
 
-![The plugin's settings page: rail alignment and dots-per-page segmented controls](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/docs/images/%E6%8F%92%E4%BB%B6%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0%E8%AE%BE%E7%BD%AE.jpg)
+![The plugin's settings page: rail alignment and dots-per-page segmented controls](https://raw.githubusercontent.com/AbelKeithsun/dsh-question-nav/main/assets/screenshots/02-settings.png)
 
 ## What it does
 
@@ -95,12 +77,50 @@ Plugin settings (rail alignment + dots per page):
 - DeepSeek Harness Web GUI (a runnable DSH profile; the `dsh` CLI).
 - Node.js `>= 20` (matches the DSH SDK peer range).
 
+## Which version to install
+
+The package publishes **two lines** under the same name, so pick the one that
+matches the DSH build your GUI runs on:
+
+| npm dist-tag | Version | Targets the DSH | Status |
+|---|---|---|---|
+| `latest` | `0.7.x` | `0.1.1-rc.1` SDK line | **Stable** — recommended for everyday use |
+| `alpha` | `0.8.0-alpha.x` | `0.1.2-alpha.2` SDK line | **Alpha** — for the Alpha GUI build |
+
+- **Most users install the `latest` (stable) line** — it tracks the stable DSH
+  release and is safe for daily use.
+- **Running the DSH Alpha GUI (`0.1.2-alpha.2`)?** Install the `alpha`
+  dist-tag instead. The stable build reads a chat snapshot API
+  (`session.getSnapshot().chat`) that was **removed** in the Alpha SDK; the
+  `alpha` build reads the live chat through the new conversation service
+  instead. Installing the stable line on an Alpha GUI would leave the strip
+  degraded (projection-only dots).
+- **Not sure which DSH build you have?** Check the version in your GUI / with
+  `dsh --version`; if it reports `0.1.1-rc.x`, use `latest`; if it reports
+  `0.1.2-alpha.x`, use `alpha`.
+
 ## Install
 
-Install the prebuilt package from npm and add it to a profile:
+Install the prebuilt package from npm and add it to a profile. **Use the
+dist-tag that matches your DSH build** (see above):
+
+**Stable line (DSH `0.1.1-rc.1`, most users):**
 
 ```sh
-dsh plugin --profile web add @luziyang2026/dsh-question-nav
+dsh plugin --profile web add @luziyang2026/dsh-question-nav        # latest → 0.7.x
+```
+
+**Alpha line (DSH `0.1.2-alpha.2` GUI):**
+
+```sh
+dsh plugin --profile web add @luziyang2026/dsh-question-nav@alpha  # alpha → 0.8.0-alpha.x
+```
+
+If you prefer a specific version, pin it explicitly:
+
+```sh
+dsh plugin --profile web add @luziyang2026/dsh-question-nav@0.7.7        # stable pin
+dsh plugin --profile web add @luziyang2026/dsh-question-nav@0.8.0-alpha.0 # alpha pin
 ```
 
 Then restart the DSH Web GUI to load the new bundle.
